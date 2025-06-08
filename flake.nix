@@ -52,9 +52,25 @@
               mv ./src/heat_maps/${path}.html $out/
             '';
           };
+        knit-report = pkgs.stdenv.mkDerivation {
+            name = "knit";
+            src = ./.;
+            buildInputs = deps ++ (with pkgs; [ pandoc ]);
+            # This produces ${name}.html
+            buildPhase = ''
+              ${pkgs.R}/bin/R -e "rmarkdown::render('./Report.Rmd', output_format = 'html_document')"
+            '';
+            installPhase = ''
+              mkdir $out
+              mv ./src/Report.html $out/
+            '';
+          };
         serve = path:
           pkgs.writeShellScriptBin "serve" ''
             ${pkgs.http-server}/bin/http-server ${knit path}/
+          '';
+        serve-report = pkgs.writeShellScriptBin "serve-report" ''
+            ${pkgs.http-server}/bin/http-server ${knit-report}/
           '';
         serve-live = pkgs.writeShellScriptBin "serve-live" ''
             fname=$(basename "$1")
@@ -78,6 +94,10 @@
               program = "${serve ftrunk}/bin/serve";
             };
           }) rmds)) // {
+            Report = {
+              type = "app";
+              program = "${serve-report}/bin/serve-report";
+            };
             serve-live = {
               type = "app";
               program = "${serve-live}/bin/serve-live";
