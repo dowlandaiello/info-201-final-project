@@ -1,0 +1,593 @@
+---
+title: "2nd Research Question - Winston Qi"
+author: "Winston Qi"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,
+                      results = "hide",  warning = FALSE)
+```
+
+```{r, message = FALSE}
+library(tidyverse)
+library(scales)
+```
+
+## 1 Overview
+This project explores the relationship between presidential election outcomes and immigration policy enforcement in the United States, specifically looking at deportations and border apprehensions from 2000 to 2023. By combining datasets on election results, apprehensions by place of origin, and deportations conducted by ICE, we analyze whether political shifts, particularly between Republican and Democratic administrations, correlate with changes in immigration enforcement patterns. While no clear predictive relationship or trends were found, key anomalies such as the 2019 spike in enforcement actions and the COVID-19 decline are highlighted.
+
+## 2 Introduction
+  Immigration in recent years has become a highly polarizing political issue, particularly in presidential election cycles. With each change in administration, enforcement patterns and rhetoric surrounding immigration policy have shifted dramatically. This project investigates whether presidential election outcomes, particularly party affiliation of the winning candidate, align with measurable changes in immigration enforcement actions, specifically deportations and border apprehensions. In terms of political parties, Republicans are generally more associated with harsher and aggressive policies against immigration, while Democrats are more lenient and accompanying of migrants. 
+
+The research question that I will be answering is: How are presidential election results correlated with immigration policy (measured via deportations and apprehensions at the border)? 
+
+This topic matters for several reasons. It offers insight into how public opinion, expressed through electoral outcomes, may (or may not) influence immigration enforcement in practice. This information is valuable not only for political scientists and economists but also for immigrants, advocates, and policymakers seeking to understand and respond to shifts in federal immigration behavior, and how the real world experience of immigrants changes due to such policy changes.
+
+## 3 Data Source
+I utilized three datasets:
+Presidential election data by county from 2000-2020, obtained from Harvard University, which is publicly accessible for non-commercial use and provides county-level U.S. presidential election results from 2000–2020. The dataset was collected by my groupmate Dowland. 
+Data for deportations and apprehensions was sourced from the Deportation Data Project at deportationdata.org, supported by a team of academics and lawyers (that can be found here: https://deportationdata.org/team.html) which gather public, anonymized U.S. government immigration enforcement datasets directly from the US Government through the Freedom of Information Act. The apprehension datasets were taken from the "Annual apprehensions with place of origin" section in the Customs and Border Protection (CBP) Data repository. The CBP collects individual-level data on every person it arrests or expels at the border as well as on every person who arrives at a port of entry whom it deems inadmissible. The deportation datasets were taken from the "Removals (deportations)" section in the Immigration and Customs Enforcement (ICE) Data repository.
+
+TODO:
+All datasets are extremely large and requires significant cleaning. Even after cleaning, table with multiple hundreds of thousands of lines are produced.
+
+## 4 Data
+
+### 4.1 Election results 2000-2020 Dataset
+```{r , message = FALSE}
+election_results <- read_delim("../../data_cleaned/harvard_election/countypres_2000-2020.csv")
+head(election_results)
+dim(election_results)
+```
+In the summarized elections dataset, there are 72617 rows and 12 columns. Each row represents the number of votes for a presidentital candidate in a state county and other relevant information for a particular election year.
+
+### 4.2 Removals (Deportations) Datasets (2011-2023)
+```{r, echo = FALSE}
+ice_rem11_12 <- read_delim("deportations_data/ICE_Removals_FY2012-FY2014-REDACTED_raw.csv")
+dim(ice_rem11_12)
+ice_rem13 <- read_delim("deportations_data/2023-ICFO_42034_Removals_FY13-12_LESA-STU_FINAL- Redacted_raw.csv")
+dim(ice_rem13)
+ice_rem15 <- read_delim("deportations_data/ICE_Removals_FY2015-FY2023_YTD-REDACTED_raw.csv")
+dim(ice_rem15)
+ice_rem16_14 <- read_delim("deportations_data/2023-ICFO_42034_Removals_FY16-14_LESA-STU_FINAL_Redacted_raw.csv")
+dim(ice_rem16_14)
+ice_rem19_17 <- read_delim("deportations_data/2023-ICFO_42034_Removals_FY19-17_LESA-STU_FINAL_Redacted_raw.csv")
+dim(ice_rem19_17)
+ice_rem23_22 <- read_delim("deportations_data/2023-ICFO_42034_Removals_FY23-20_LESA-STU_FINAL_Redacted_raw.csv")
+dim(ice_rem23_22)
+```
+
+
+
+There are some breaks in the years (e.g missing 2017 and 2020-2021) due to no datasets for those years being present on the sourced website, but general trends in deportations should still be seen with the years that are available.
+Dataset variables are not entirely consistent, but opted to only use the Departure Date variable in each dataset as the only relevant variable for consistency and the utility of dates for which immigrants were deported. Originally planned for usage and analysis of variables like Birth Country, Citizenship Country, but decided against it as they didn't help answer my research question of how election results affected immigration policy as much as I initially thought. 
+
+TODO:
+                  each row represents 
+
+
+Instead opting to focus on the total number of deportations that happen in a given year to track the impact of immigration policies.
+
+
+### 4.3 Annual apprehensions with place of origin (2000-2022)
+
+Made a for loop to extract the individual datasets from the aggregated data list, as the file names, being "Family Units apprehended along the SWB FY20XX Redacted_raw.csv", (20XX for their respective years) were fairly uniform. The datasets range from the years 2000-2022. Also made a dataframe for the original dimensions of each dataset, as can be seen below.
+The names of the variables directly listed in the dataset are "U.S. Border Patrol Nationwide Apprehensions ", then to "...2",  "...3" etc. up to "...8" for the datasets between 2000-2006. The datasets between 2007-2015 have all the previous variables but add on a new variable, being "...9"; datasets between 2016-2022 follow the same format as the 2007-2015 datasets along with variables "...10" and "...11". When manually looking at the datasets, these variables are all placeholder variable names, with the actual names written on line 6. The reasoning for this is there is are a few lines of documentation in the first few rows, present in all apprehension datasets and presumably for uses of identification/labeling. It may have presented different if shown in its original xlsx format, but to use the data I converted all files to csv using an online converter. There are numerous variables but I decided to focus only on the fiscal year or "FY" variable,  for the for similar reasons to the deportations datasets above of not being relevant enough to answering my research question. Each row represents an individual apprehended by the USBP and general relevant personal and geographical information gathered pertaining to them in a given year.
+
+```{r, message = FALSE}
+years <- 2000:2022
+app_data <- lapply(years, function(data_read) {
+  read_delim(paste0("apprehensions_data/Family Units apprehended along the SWB FY", data_read, " Redacted_raw.csv"), 
+             show_col_types = FALSE)
+})
+names(app_data) <- paste0("app_", years)
+# works
+
+for (name in names(app_data)) {
+  assign(name, app_data[[name]])
+}
+
+app_2022[6, ]
+
+
+dimensions_df <- tibble(
+  dataset = names(app_data),
+  nrow = sapply(app_data, nrow),
+  ncol = sapply(app_data, ncol)
+)
+
+print(dimensions_df)
+```
+
+## 5 Method
+In general, to explore the extent of my question, I:
+- Cleaned all datasets for consistent time formatting, variable naming, and missing data.
+- Transformed the election results into a long format that included total votes by party and year.
+- Aggregated apprehension and deportation datasets into a by year and total votes format for easier comparison.
+- Merged the datasets on year to compare political outcomes with enforcement levels.
+
+I created 2 main new variables: 
+- party_diff: Numeric difference between Republican and Democratic votes.
+- border_state: A categorical variable indicating whether a state borders Mexico.
+
+TODO:
+Some of the challenged I faced during my manipulation and analysis were deciding what formats to use, 
+Analysis of results is provided with graphs in Results section below.
+
+### 5.1 Date Separation Function
+Created a function to separate the year column of a dataframe into a date format when needed, later discarded other newly created date columns for just year, as I wanted to capture larger trends by year for the bigger picture of periods between elections rather than a day by day/month by month basis.
+```{r , message = FALSE}
+date_sep <- function(data, date_col) {
+  mutate(data, date = as_date({{date_col}}, format = "%m/%d/%Y")) %>%
+  mutate(year = as.numeric(format(date, format = "%Y")),
+         month = as.numeric(format(date, format = "%m")),
+         day = as.numeric(format(date, format = "%d"))) %>% 
+    select(year, month, day, date) %>% 
+    na.omit()
+}
+```
+
+### 5.2 Election Results Filtering  
+
+Checked to make sure that there wasn't NA values or other substutionary values in the total votes, then summarized the Democrat and Republican total votes by year and put them into one dataframe. Only concerned with Republicans and Democrats, as they are the 2 main parties that win US elections and the portion of votes from other parties are not significant enough to affect any election results.
+Pivoted to wide to make the voting totals per year by party easier to interpret visually, then included a voting difference variable. The aggregate total votes for each party by year helps quickly see and compare the total amount of votes that each party got, while the difference helps see the general party voting trends in the United States and which party is winning the popular vote.
+```{r, message=FALSE}
+range(election_results$candidatevotes)
+
+dem_votes <- election_results %>% 
+  select(year, party, candidatevotes) %>% 
+  na.omit() %>% 
+  filter(party %in% "DEMOCRAT") %>% 
+  group_by(year, party) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+head(dem_votes)
+
+rep_votes <- election_results %>% 
+  select(year, party, candidatevotes) %>% 
+  na.omit() %>% 
+  filter(party %in% "REPUBLICAN") %>% 
+  group_by(year, party) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+head(rep_votes)
+
+total_votes_by_yr <- rbind(dem_votes, rep_votes)
+head(total_votes_by_yr)
+
+wide_votes <- total_votes_by_yr %>% 
+  pivot_wider(id_cols = year, names_from = party, values_from = tot_votes)
+head(wide_votes)
+
+vote_diff_by_yr <- wide_votes %>% 
+  mutate("Vote Difference (Republican minus Democrat)" = REPUBLICAN - DEMOCRAT)
+head(vote_diff_by_yr)
+```
+
+
+### 5.2.2 Border Status Differentiation
+
+Used cleaning methods of above section except creating new categorical variables/columns of border status, border state, etc. to determine a state' status of being on the border of the United States or not and differentiating the types of votes through border and political party categories. These distinctions will help in answering one of the sub questions of whether people in border states will be more likely to vote Republican for their immigration policies due to immigration being a more tangible and closer issue to them - through comparing the voting trends of border and non-border states.
+``` {r , message = FALSE}
+border_states <- c("MAINE", "NEW HAMPSHIRE", "VERMONT", "NEW YORK", "PENNSYLVANIA", "OHIO", "MICHIGAN", "MINNESOTA", "NORTH DAKOTA", "MONTANA", "IDAHO", "WASHINGTON", "ALASKA", "CALIFORNIA", "NEW MEXICO", "ARIZONA", "TEXAS")
+
+bor_status <- election_results %>% 
+  mutate(border_state = state %in% border_states) 
+bor_status
+
+dem_bor_votes <- bor_status %>% 
+  select(year, party, candidatevotes, border_state) %>% 
+  na.omit() %>% 
+  filter(party %in% "DEMOCRAT") %>% 
+  group_by(year, party, border_state) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+dem_bor_votes
+
+rep_bor_votes <- bor_status %>% 
+  select(year, party, candidatevotes, border_state) %>% 
+  na.omit() %>% 
+  filter(party %in% "REPUBLICAN") %>% 
+  group_by(year, party, border_state) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+rep_bor_votes
+
+total_bor_votes_by_yr <- rbind(dem_bor_votes, rep_bor_votes) 
+total_bor_votes_by_yr
+
+wide_bor_votes <- total_bor_votes_by_yr %>% 
+  pivot_wider(id_cols = year, names_from = c(party, border_state), values_from = tot_votes)
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "DEMOCRAT_FALSE"] <- "Non-Border: Democrat"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "DEMOCRAT_TRUE"] <- "Border: Democrat"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "REPUBLICAN_FALSE"] <- "Non-Border: Republican"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "REPUBLICAN_TRUE"] <- "Border: Republican"
+wide_bor_votes <- wide_bor_votes %>% 
+  mutate("Border Vote Difference" = `Border: Republican` -`Border: Democrat`) %>% 
+  mutate("Non-Border Vote Difference" = `Non-Border: Republican` - `Non-Border: Democrat`) 
+wide_bor_votes
+
+long_df_bor <- wide_bor_votes %>% 
+  pivot_longer(cols = c("Non-Border: Democrat", "Border: Democrat",
+                        "Non-Border: Republican", "Border: Republican",
+                        "Border Vote Difference", "Non-Border Vote Difference"),
+                 names_to = "Number of State Votes:", names_transform = list(n = as.integer),
+                 values_to = "number") %>% 
+  na.omit()
+
+long_df_bor
+```
+
+
+### 5.3 Deportations Filtering and Merging
+
+Did not use a loop or other method to group datasets for filtering and date separation before merging as the file variables and their order were inconsistent between datasets. Selected only the departure dates of for consistency and the dates for which immigrants were deported. Discarded other variables like Birth Country or Citizenship Country of immigrants. Such variables were originally planned for usage and analysis but later on I decided that they didn't help answer my research question of how election results affected immigration policy as much as I initially thought, instead opting to focus on the total number of deportations that happen in a given year to track the impact of immigration policies. Used the date_sep function to filter out the dates for each of the deportations in the datasets, then binded them together into a total deportations dataset, using sample_n and head to check that it is good. Discarded the complete date, month, and day portions created by the date_sep function to keep the year, and counted the # of rows each year had. There were some breaks in the years (e.g missing 2017 and 2020-2021) due to no datasets for those years being present in the source that pertained to the same category, but decided to continue general trends in deportations can still be seen with the years that are available.
+```{r , message = FALSE}
+totalice_yr11_12 <- ice_rem11_12 %>% 
+  select(...2) %>%
+  date_sep(...2)
+
+totalice_yr13 <- ice_rem13 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`) 
+
+totalice_yr14_15 <- ice_rem15 %>% 
+  select(...3) %>% 
+  date_sep(...3)
+ 
+totalice_yr16_14 <- ice_rem16_14 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`) 
+
+totalice_yr19_17 <- ice_rem19_17 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`) 
+
+totalice_yr23_20 <- ice_rem23_22 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`)
+
+totalice_by_year <- rbind(totalice_yr11_12, totalice_yr13, totalice_yr14_15, totalice_yr16_14, totalice_yr19_17, totalice_yr23_20) %>% 
+  select(date, year, month, day)
+totalice_by_year
+head(totalice_by_year)
+sample_n(totalice_by_year, 20)
+
+icedeports_by_yr <- totalice_by_year %>% 
+  select(year) %>% 
+  na.omit() %>% 
+  count(year)
+
+colnames(icedeports_by_yr)[colnames(icedeports_by_yr) == "n"] <- "Deportations"
+icedeports_by_yr
+```
+
+
+### 5.4 Apprehensions Filtering and Merging
+
+Similarly to the above section, only selected/filtered for the year and discarded other variables/values for general yearly apprehension trends that correspond to immigration policies' impacts/enforcements. The values with year in the variable "U.S. Border Patrol Nationwide Apprehensions" did not include month, day, or time, so filtered for the years through checking for the string "FY2", combining all the cleaned datasets, then removing the "FY" suffix to leave just the year and counting up the number of apprehensions per year. 
+```{r , message = FALSE}
+app_00_06 <- rbind(app_2000, app_2001, app_2002 , app_2003, app_2004, app_2005, app_2006)
+app_00_06 <- app_00_06 %>%
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>%
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+app_07_15 <- rbind(app_2007, app_2008, app_2009, app_2010, app_2011, app_2012, app_2013, app_2014, app_2015)
+app_07_15 <- app_07_15 %>% 
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>% 
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+app_16_22 <- rbind(app_2016, app_2017, app_2018, app_2019, app_2020, app_2021, app_2022)
+app_16_22 <- app_16_22 %>% 
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>% 
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+totalapp_by_year <- rbind(app_00_06, app_07_15, app_16_22)
+
+totalapp_by_year <- str_replace_all(totalapp_by_year$`U.S. Border Patrol Nationwide Apprehensions `, "[FY]", "") %>% 
+  data.frame() 
+colnames(totalapp_by_year)[colnames(totalapp_by_year) == "."] <- "year"
+
+apps_by_yr <- totalapp_by_year %>% 
+  select(year) %>% 
+  na.omit() %>% 
+  count(year) 
+
+colnames(apps_by_yr)[colnames(apps_by_yr) == "n"] <- "Apprehensions at the Border"
+apps_by_yr <- apps_by_yr %>% 
+  transform(year = as.integer(year)) 
+
+apps_by_yr
+```
+
+
+### 5.5 Aggregate Dataset Merging into Long Format
+
+This code chunk is for the merging, arranging, and pivoting to long form the core and cleaned/reworked datasets for intended visual graphs and their subsequent analyses.
+```{r , message = FALSE}
+app_dep_votes <- rbind(wide_votes, apps_by_yr, icedeports_by_yr, vote_diff_by_yr) %>% 
+  arrange(year)
+app_dep_votes
+
+longdf_A_D_V <- app_dep_votes %>% 
+  pivot_longer(cols = c("DEMOCRAT", "REPUBLICAN", "Apprehensions at the Border",
+                        "Deportations", "Vote Difference (Republican minus Democrat)"),
+                 names_to = "Number of:", names_transform = list(n = as.integer),
+                 values_to = "number") %>%
+  na.omit()
+longdf_A_D_V
+```
+## 5.6 Analysis
+
+TODO:
+For my analysis, I decided to first create some graphs/plots to visually analyze the data gathered before deciding on any further potential or more complex analysis methods (e.g. slopes, linear regression) were needed. If the graphs clearly show certain direction trends or , then
+
+I mainly stuck to line graphs due to the heavily numerical aspects of my data, with the exception being the bar plot regarding the election results 
+
+
+#### 5.6.1 Aggregate Line Graph of all Datasets
+
+I first attempted to compare the number of deportations and apprehensions to votes by year separately, and so created two line graphs to see the general voting trends  against the immigration related data. At a glance, it seems fairly hard to distinguish any trends given the sizable numerical gap between the election results and deportations/apprehensions, with the later two seemingly having close to no fluctuations or changes in their number on the scale currently alloted in the graph by default. In fact, it seems like both look like they are extremely close to 0, which is not true at all considering the values gleaned from above. Additionally, there are several points where data cuts off, like how the election results cuts off at 2020, or how deportations has much less datapoints to go off of compared to the other data, not to mention how it has some missing years.
+
+
+TODO:
+As such, these observations led me to break down the graphs into comparisons
+
+```{r}
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Deportations", "Vote Difference (Republican minus Democrat)", "REPUBLICAN", "DEMOCRAT")) %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Deportations and Votes, by Year")
+
+
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border", "Vote Difference (Republican minus Democrat)", "REPUBLICAN", "DEMOCRAT")) %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions and Votes, by Year")
+```
+
+#### 5.6.2 Election Results (Popular Vote)
+
+#### 5.6.2.1 Election Results from Total Party Candidate Votes
+
+As can be seen, Democrats won the majority of popular votes between 2000-2020, with the Republicans only winning in 2004 over the Democrats. Initially between 2000-2004, the amount of votes between the parties are fairly close, but afterwards the Democrats maintained the lead with several millions of votes for each election.
+```{r}
+total_votes_by_yr %>% 
+  mutate(year = as.character(year)) %>% 
+  ggplot(aes(x = year, y = tot_votes)) +
+  geom_col(aes(fill = party), stat = "identity", position = "dodge") +
+  labs(title = "Election Results from Total Party Candidate Votes", 
+       y = "Number of Candidate Votes")  +
+   scale_y_continuous(name="Number of Candidate Votes", labels = comma) +
+  scale_fill_manual(values = c("#03bfc4", "#f7766d"), 
+                    breaks = c("DEMOCRAT", "REPUBLICAN"))
+```
+
+#### 5.6.2.2 Total Vote Differences (Republican - Democrat)
+
+The line graph shows that there was an initial trend in Republican Voting like the previous barplot suggested, but that the trend flipped on its head to Democrat lead in 2008. The popular vote has maintained democrat for all but 2004, but was still overcome in 2000, 2004, and 2016, partially indicated as peaks in Republican voting during those years.
+
+TODO: 
+While not completely relevant to the topic, the trend was 
+``` {r}
+# Vote Difference Only
+app_dep_votes %>%
+  select(year, `Vote Difference (Republican minus Democrat)`) %>% 
+  na.omit() %>% 
+  # works, need the above 2 things to work
+  ggplot(aes(x = year, y = `Vote Difference (Republican minus Democrat)`,
+             color = `Vote Difference (Republican minus Democrat)`)) +
+  geom_point(size = 2) +
+  geom_line(aes(group=1)) + 
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Voting Difference (Rep. - Dem.), by Year") +
+  scale_color_gradient(labels = comma,
+    low = "blue",
+    high = "red")
+```
+
+#### 5.6.3 Apprehensions vs Deportations 
+
+While I did start with a plot including the voting difference with apprehensions and deportations, the data for the vote difference was not as applicable or generalizable as I thought to the data regarding immigration enforcement, as the lengths between each election year was fairly wide (being 4 years), making it hard to try and find direct correlation between the more frequently changing values of the other two. Additionally, the numerical difference was still very wide despite the reduction in scale compared to my inital graphs of all the datasets as one graph, which restricts the degree of comparisons/analysis visually. Even when considering apprehensions, which had more years of data than deportations, it was hard to see any changes from election results reflected into apprehensions.
+
+```{r}
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border",
+  "Deportations", "Vote Difference (Republican minus Democrat)")) %>% 
+  na.omit() %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+So I decided to focus on just comparing apprehensions and deportations. 
+
+```{r}
+# Apprehensions vs Deportations
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border", "Deportations")) %>% 
+  na.omit() %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+The scaling is better, but deportations only filled less than half the years that apprehensions had data for, so I decided to filter for the years that had data for both apprehensions and deportations to be able to analyze the data better.
+
+Created a new dataframe within those requirements to get this graph:
+
+```{r}
+# Only years where there was both deportation and apphrehension data
+app_vs_dep <- merge(apps_by_yr, icedeports_by_yr) %>% 
+  # all = T
+  arrange(year)
+app_vs_dep
+
+long_df_dep_app <- app_vs_dep %>% 
+  # filter(year > 2010) %>% 
+    pivot_longer(cols = c("Apprehensions at the Border", "Deportations"),
+                 names_to = "Number of:", names_transform = list(n = as.integer),
+                 values_to = "number") %>% 
+  na.omit()
+long_df_dep_app
+
+long_df_dep_app %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+
+Asides from the drop in both starting from 2019 and affecting a couple years beyond it, most likely due to the COVID 19 Pandemic, there did not seem to be any significant correlation/trend between apprehensions and deportations. The spike in both around 2019 may be attributed to the ICE Raids and Immigration Policies that the Republican President, which was Donald Trump, enacted at the time. Deportations seem to generally be trending downwards, and the same can be said for apprehensions in regards to its longer timeframe (2000-2022). However, in the shorter timeframe (2010-2022), apprehensions seemed to be going up.
+
+#### 5.6.4 Border
+
+Here I simply compared the total number of votes for each party that border and non-border states had, in order to see whether or not a state being on the border of the United States (including both Mexico and Canada) had an impact on whether they voted more Republican due to their 
+
+```{r}
+# Border vs Non-Border States Votes
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Non-Border: Democrat", "Border: Democrat",
+                        "Non-Border: Republican", "Border: Republican")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Votes, by Year", 
+       y = "Number of Votes")
+```
+I attempted to 
+
+```{r}
+# Border Differences
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Border Vote Difference", "Non-Border Vote Difference")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Voting Difference (Rep - Dem), by Year", 
+       y = "Number of Votes")
+```
+
+From the graphs, border states do not seem to be more likely to vote Republican regarding their assumed increased involvement with immigration based on geographical location; follow similar voting trends in regards to non-border states. In fact, non-border states seem to vote more Republican at times. 
+
+
+## 6 Results
+
+I explored correlations visually (via line and scatter plots) and descriptively, and made adjustments for improved visual comparisons when appropriate (e.g. number scalings, filtering certain years, etc.)
+
+Some of my key findings were:
+
+- Election Trends: Democrats won the popular vote in most years between 2000–2020, but not always the presidency (e.g., 2000 and 2016).
+```{r}
+total_votes_by_yr %>% 
+  mutate(year = as.character(year)) %>% 
+  ggplot(aes(x = year, y = tot_votes)) +
+  geom_col(aes(fill = party), stat = "identity", position = "dodge") +
+  labs(title = "Election Results from Total Party Candidate Votes", 
+       y = "Number of Candidate Votes")  +
+   scale_y_continuous(name="Number of Candidate Votes", labels = comma) +
+  scale_fill_manual(values = c("#03bfc4", "#f7766d"), 
+                    breaks = c("DEMOCRAT", "REPUBLICAN"))
+
+# Vote Difference Only
+app_dep_votes %>%
+  select(year, `Vote Difference (Republican minus Democrat)`) %>% 
+  na.omit() %>% 
+  # works, need the above 2 things to work
+  ggplot(aes(x = year, y = `Vote Difference (Republican minus Democrat)`,
+             color = `Vote Difference (Republican minus Democrat)`)) +
+  geom_point(size = 2) +
+  geom_line(aes(group=1)) + 
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Voting Difference (Rep. - Dem.), by Year") +
+  scale_color_gradient(labels = comma,
+    low = "blue",
+    high = "red")
+```
+
+
+- Deportation Trends: Deportations generally decreased from 2012–2023, with a sharp drop post-2019.
+
+- Apprehensions: Sharp rise in 2019, coinciding with Trump administration raids, and a sharp drop during COVID.
+
+```{r}
+long_df_dep_app %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+
+- Border vs. Non-Border States: Voting patterns do not significantly differ between these groups and instead have very similar voting trends, contradicting assumptions that border states would lean more Republican.
+```{r}
+# Border vs Non-Border States Votes
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Non-Border: Democrat", "Border: Democrat",
+                        "Non-Border: Republican", "Border: Republican")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Votes, by Year", 
+       y = "Number of Votes")
+
+# Border Differences
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Border Vote Difference", "Non-Border Vote Difference")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Voting Difference (Rep - Dem), by Year", 
+       y = "Number of Votes")
+```
+
+
+These graphs illustrate that immigrant enforcement activity does not reliably or consistently track with party control.
+
+
+
+## 7 Discussion
+My analysis reveals that presidential election results do not appear to directly predict immigration enforcement activity. While Republican administrations are generally assumed to favor stricter immigration policy, actual deportation and apprehension figures vary year to year and are influenced by more than just electoral outcomes—such as economic conditions, global migration patterns, or events like COVID-19. The spike in apprehensions and deportations in 2019 is a clear outlier likely driven by targeted ICE activity and publicized raids. The COVID-19 pandemic appears to have curtailed migration and enforcement alike, given the decrease in both apprehensions and deporations.
+
+Limitations:
+- Data years do not align perfectly across datasets.
+
+- Some relevant events (e.g., Title 42 expulsions, sanctuary policies) are not captured.
+
+- Research Question does not try to tackle causation, only attempting to find potential trends and associations.
+
+Conclusions:
+- Popular vote election results was not a good predictor of deportations and apprehensions, no discernable trend even at a glance
+
+- Spike in 2019 when ICE Raids were carried out under President Donald Trump
+
+- COVID 19 in 2019 significantly drove down border encounters and deportations
+
+- Border states did not seem to significantly vote more Republican than Democrat, thereby not having a great impact on election results 
+
+
+In regards to future research, perhaps zooming in on more specific states and their voting patterns and comparing voting patterns between states and/or counties specifically bordering on Mexico, Canada, or not would be more insightful in seeing if there are trends/patterns regarding immigration there. Other, more focused and complete datasets for deportation or policy could be used, and comparisons/analysis regarding specific and more concrete immigration/border policies could be addressed. 
+
+## 8 Summary  
+While electoral results offer political context, they are not strong predictors of immigration enforcement trends. Policymakers and analysts should consider broader factors, including administrative policy, global crises, and migration flows, when interpreting enforcement changes. The findings of this research question suggest that the real-world outcomes of immigration policy are not solely determined by who wins the presidency and which party they belong to, and that whether or not a state is on the borders of the United States does not necessarily lead them to vote more Republican in favor of harsher immigration policies.
