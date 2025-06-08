@@ -5,8 +5,14 @@ date: "2025-06-08"
 output: html_document
 ---
 
-```{r setup ,include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,      # don't show code
+  message = FALSE,   # suppress messages
+  warning = FALSE,   # suppress warnings
+  error = FALSE,     # suppress errors
+  results = 'hide'   # suppress printed output
+)
 ```
 
 ```{r}
