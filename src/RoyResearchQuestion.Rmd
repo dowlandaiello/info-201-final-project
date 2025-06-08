@@ -1,0 +1,288 @@
+---
+title: "3rd Research Question"
+author: "Groupmates:Dowland,Roy,Winston"
+date: "2025-05-13"
+output: html_document
+---
+```{r setup ,include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(stringr)
+```
+## 1 Abstract:
+
+In our project, we will be investigating the relationship between public sentiment toward the topic of immigration and the enforcement of U.S. immigration policy throughout the time frame from 2004 to 2024. As we use Google Trends as data for the Public interest in immigration and U.S Customs and Border Protection records of Apprehensions from 2020 to 2023, we will be examining how attention towards immigration has changed over time across different regions in the United States.
+
+## 2 Introduction:
+
+Immigration has always been a politically and socially charged topic in the United States, particularly around presidential election time, for decades. More recently, public debate around immigration policy, border patrol, and deportations has been increasing driven by media reporting, political speech, and changing national agendas. Consequently, it is more important now, with the increasing public concern provided through social media and the Web, to understand the relationship between public attitudes and the enforcement of policy. In our research, the public sentiment can be represent by the Google Trends data, which indicates the frequency with which topics related to immigration are searched online. Although the data itself is not an actual measure of opinions, but it can still indicate what types of topic is trending in the public. Meanwhile, U.S. Customs and Border Protection continually posts records on border apprehensions, expulsions, and inadmissibles, giving the public a measure of policy enforcement toward immigration.
+
+Research Question I'll Be investigating: How does public sentiment toward immigration vary across different U.S. regions, particularly during presidential election cycles?
+
+This research question is important to us as it helps us understand how public attention and concern about immigration can differ depending on where people live in the United State. By using both the Google trend's data and Apprehension data, we can understand how much people are looking into the topic of immigration even if they aren't saying it out loud directly.
+
+## 3 Data Sources
+### 3.1 Sources of Data
+In my research question, I'll be using two different data set. The first one is from google trend which collects the public's query incidence score from 0-100 as the score goes up if the public searches more about immigration. The Google's trend data set is coverage from 2000-2024.\n
+
+[Google Trend](https://trends.google.com/trends/)\n
+
+The second data set I used is from US Custom and Border Protection as it gives us the apprehension data in the United State coverage from 2020-2023 which shows the recent government enforcement.
+
+[US Custom and Border](https://www.cbp.gov/document/stats/nationwide-encounters)
+
+The US Custom and Border Protection data set is collected by me and the Google Trend's data is collected by my group mate Dowland.
+
+### 3.2 Data Usage Permission
+
+Both data set is freely accessible to the public that have access to the internet. There are no restriction to the data set. However for the Google Trend's data, you'll have to put the keyword in for example: "Immigration", to be able to search for the Query Incidence Score for the topic you're interested in.
+
+### 3.3 Data Supporting Research Question
+
+For my research question, I had chosen the Google Trend's data set as it provide a measurable indicator of public interest in the topic of immigration across the time frame and regions we're investigating in. Since our research question focus on how public sentiment may influence immigration policy, the google trend's data set will help us capture all the attention and concern of public in different election cycles.
+
+On the other side, border Encounter data set (2020-2023) offers concrete data on immigration enforcement actions, such as apprehensions, expulsions and inadmissible cases. These action represent the policy outcomes we aim to evaluate in response to public sentiment. Together, these dataset will support my research question by allowing me to examine whether public interest are associate with changes in federal immigration enforcement.
+
+## 4. Data
+
+### 4.1 Google Trends Data
+```{r}
+google <- read.csv("../../data_cleaned/google_trends/summarized.csv")
+head(google,3)
+```
+```{r}
+str(google)
+```
+From the Google Trends Dataset, we can observe that there are 2730 columns and 4 rows of data. Which represent that there are 4 different measured variaible which are X (Number of observation), DMA (Designated Market Area), Datarange (the Date range of the data), and the query_incidence(Which is the score that represent the interset), with 2730 of different data (2730 columns).
+
+```{r}
+colSums(is.na(google))
+```
+When observing if there are any NA values in the Google trends data set, we can notice that there are 7 NA values in the Query_Incidence score variables which will be removed for data cleaning.
+```{r}
+google <- google %>%
+  filter(!is.na(query_incidence))
+colSums(is.na(google))
+```
+
+### 4.2  Border Encounters Data
+
+```{r}
+apprehension <- read.csv("../../data_cleaned/sbo-encounters-fy20-fy23.csv")
+head(apprehension,3)
+```
+```{r}
+str(apprehension)
+```
+From Border Encounter's data set, we can observe that there are 2409 columns with 9 rows which tells us that there are 9 different variables which indicate the Fiscal Year, Month.Grouping, Month..abbv., ocponent(Which office), demographic, Citizenshipl.Grouping(Immigrant's Citizenship),Title of AUthroity, Encounter.Type (Inadmissibles, Expulsions, Apprehensions), and the Encounter.Count.
+```{r}
+colSums(is.na(apprehension))
+```
+By looking at the data below, there are no na value in the Apprehension data.
+
+
+## 5 Method
+### 5.1 Data Cleaninig for the Google Trends Data
+```{r}
+locales <- c("metro")
+timeframes <- c("04-08", "08-12", "12-16", "16-20", "20-24", "16-17", "17-18", "18-19", "19-20", "20-21", "21-22", "22-23", "23-24")
+
+read_imm_reg_timeframe <- function(region, daterange) {
+  path <- str_c(
+    "./data_cleaned/google_trends/query_immigration_",
+    region,
+    "_",
+    daterange,
+    "-election.csv"
+  )
+
+  df <- read.csv(path)
+
+  df %>%
+    mutate("daterange" = daterange) %>%
+    (\(df) df %>% rename(query_incidence = names(df)[2]))() %>%
+    select(DMA, daterange, query_incidence)
+}
+```
+The original Google Trends data was spread across multiple CSV files, which each corresponding to a specific election cycle and region. Using a loop in R, we programmatically read, labeled, and combined these files into a single summary data set (summarized.csv), which contains the query incidence across the time of 2000-2024. 
+
+* The Google Trends Data was cleaned by our groupmates Dowland which we all used the summarized.csv data as the main dataset for our google trend's data from 2004-2024
+
+- The most relevent variables that will be answering our research question will be the date range and the Query Incidence scores as we're able to observe the change of public interest over time through different election cycle in the United State.
+
+#### Data Wrangling for Google Trends
+```{r wrangle-data}
+google <- google %>%
+  mutate(Fiscal.Year = case_when(
+    daterange == "04-08" ~ 2008,
+    daterange == "08-12" ~ 2012,
+    daterange == "12-16" ~ 2016,
+    daterange == "16-20" ~ 2020,
+    daterange == "20-24" ~ 2024,
+    TRUE ~ NA_real_
+  ))
+
+google_summary <- google %>%
+  group_by(Fiscal.Year) %>%
+  summarise(avg_query_incidence = mean(query_incidence, na.rm = TRUE))
+
+```
+```{r}
+google_merge <- google %>%
+  mutate(Fiscal.Year = case_when(
+    daterange == "16-20" ~ 2020,
+    daterange == "20-21" ~ 2021,
+    daterange == "21-22" ~ 2022,
+    daterange == "22-23" ~ 2023,
+    TRUE ~ NA_real_
+  ))
+google_mergesummary <- google_merge %>%
+  group_by(Fiscal.Year) %>%
+  summarise(avg_query_incidence = mean(query_incidence, na.rm = TRUE))
+```
+
+
+In this steps, I transformed the Google Trends data by mapping each date range to a single fiscal year to align it with policy enforcement records. Then, I summarized public sentiment by calculating the average query incidence per year. Similarly, I grouped border enforcement data by fiscal year and encounter type, pivoting it into a wide format which is easier for comparison. These wrangling steps will allowed us to analyze both data sets on a same time scale, which would support our research in investigating the relationship between immigration sentiment and policy response.
+
+To align the data sets for analysis, I created two separate summaries from the Google Trends data. The first, google_summary, includes all years from 2008 to 2024 and was used for analyzing long-term trends in public sentiment and in different region as well. The second, google_mergesummary, was filtered to include only the years from 2020 to 2023, in order to match the timeframe of the apprehension dataset. This separation ensures that when merging both data sets, the years that are overlapped overlapping  are compared.
+
+### 5.2 Data Cleaning for Border Encounters Data
+
+```{r}
+# Summarize enforcement data by year and type
+app_summary <- apprehension %>%
+  group_by(Fiscal.Year, Encounter.Type) %>%
+  summarise(total = sum(Encounter.Count, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = Encounter.Type, values_from = total)
+```
+
+
+This is the data cleaning step where I organized the border encounter's data set. I grouped the data set by Fiscal.Year and Encounter.Type to compute the total number of encounters for each type per year by summing encounter.count while removing any missing values. After that, I reshaped the data into a wide form so Encounter.Type became its own column with corresponding total count.
+
+### 5.3 Merging Data
+```{r}
+combined_df <- left_join(google_mergesummary, app_summary, by = "Fiscal.Year")
+head(combined_df,5)
+```
+To analyze the relationship between public sentiment and immigration enforcement, I merged the two data set into one, where I merge Google Trends data and border encounter data using a left_join() on the shared variable Fiscal.Year as the google trends data set has been wrangled from date range to Fiscal Year. The merged summary data allowed me to combine the average search interest from Google Trends with the total number of apprehensions, expulsions, and inadmissible for each corresponding year.
+
+## 6 Results
+
+### 6.1. Plot 1: Public Sentiment Over Time
+```{r plot-sentiment}
+ggplot(google_summary, aes(x = Fiscal.Year, y = avg_query_incidence)) +
+  geom_line(color = "steelblue", size = 1.2) +
+  labs(title = "Public Sentiment (Search Interest) Over Time",
+       x = "Fiscal Year", y = "Average Search Index") 
+```
+  This diagram shows the average Google Search interest in immigration across different years. From the data, we can observe that public attention peaked around 2012 and 2020, which aligns with the major election cycle of Obama and Trump. The trends have highlighted how immigration has become an important topic during the politically charged period but lost attention afterward. In addition, after 2020, we can observe a decline in the public's interest in the topic of immigration which can likely be cause becuase of the increase of public attention on Covid 19.
+
+
+
+### 6.2. Plot 2: Immigration Enforcement Over Time
+```{r plot-enforcement}
+app_long <- app_summary %>%
+  pivot_longer(cols = c(Apprehensions, Expulsions, Inadmissibles),
+               names_to = "Type", values_to = "Count")
+
+ggplot(app_long, aes(x = Fiscal.Year, y = Count, color = Type)) +
+  geom_line(size = 1.2) +
+  labs(title = "Immigration Enforcement Encounters Over Time",
+       x = "Fiscal Year", y = "Number of Encounters",
+       color = "Enforcement Type") +
+  scale_color_manual(values = c("Apprehensions" = "tomato",
+                                "Expulsions" = "orange",
+                                "Inadmissibles" = "purple")) 
+```
+
+This line graph shows us the three different types of U.S Immigration enforcement action which include: Apprehensions, expulsions and inadmissible over the four fiscal years from 2020-2023. From the data, we can observe a rose in apprehension and has surpassed the rate of expulsion by 2022, which suggest a shift in enforcement strategy by the government. In additionaly, Inadmissble entris has also increased during this period, which indiccate a growing challenges at the broader for legal immigrant to enter.
+
+
+### 6.3 
+
+```{r}
+ggplot(combined_df, aes(x = avg_query_incidence, y = Apprehensions)) +
+  geom_point(color = "tomato", size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Sentiment vs Apprehensions (2020–2023)",
+    x = "Average Google Search Interest",
+    y = "Number of Apprehensions"
+  ) 
+
+```
+This scatter plot shows a clear negative correlation between average Google search interest in immigration and the number of apprehensions at the border. As public attention increases, enforcement activity appears to decline. This trend may suggest a lagged response in policy implementation or indicate that heightened public discourse influences shifts in enforcement priorities over time. 
+
+### 6.4 Additional Analysis with Google Trends
+
+```{r}
+google%>%
+  group_by(daterange) %>% 
+  top_n(5,query_incidence)
+```
+
+In additionly to the relationship between public sentiment and apprehension, it is also important to understand how the Google's trend data is built by region in the United State which some states and city may have a higher interest in the topic of immigration. The data above has shows the the top 5 quiery incidence scores with each date range from 2004-2024. In the Google's Trend data set, although some of the designated market area is listed as NA, however either the region or the city is provided.
+
+
+```{r}
+election_data <- google %>%
+  filter(DMA %in% c("Miami-Ft. Lauderdale FL", "Yuma AZ-El Centro CA",
+                    "Harlingen-Weslaco-Brownsville-McAllen TX", 
+                    "Washington DC (Hagerstown MD)")) %>%
+  filter(daterange %in% c("04-08", "08-12", "12-16", "16-20")) %>% # Filter for the desired date ranges
+  mutate(election_year = case_when(
+    daterange == "04-08" ~ "2004",
+    daterange == "08-12" ~ "2008",
+    daterange == "12-16" ~ "2012",
+    daterange == "16-20" ~ "2016",
+    TRUE ~ NA_character_
+  ))
+
+ggplot(election_data, aes(x = factor(election_year), y = query_incidence, color = DMA, group = DMA)) +
+  geom_line() +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  labs(title = "Immigration Search Trends Over Time", y = "Search Interest", x = "Election Year") +
+  facet_wrap(~DMA)
+```
+
+Through this multiple plots that shows a diverse location of the immigration related google search interest across four different Distinct in the US, we can observe that different city and region have different interest in the topic of immigration. From the graph, we can observe that Washington DC (Hagerstown, MD) has shows a steady rise in intersest, peaking in 2016, which reflect a increase in policy discourages in the nation's capital. In contrast, region like Yuma,AZ-El centro, CA has experience a sharp decline after 2004 to the topic of Immigration. This chats highlight how public sentiment around immigration is not uniform throughout the United State, where different region may put more attention on this topic than others.
+
+## 7 Discussion
+
+### 7.1 Intrepretation of Findings
+
+From my research, I had notice a negative relationship between the search interest in immigration and immigration apprehension which is what I didn't expect at the start. Specifically, from the period of 2020-2023, an decrease in the search interest has cause the apprehension encounters to increase over the 4 years which was what our team wasn't expecting. This implies that rising attention or conern is not promptly associated with an increase in enforcement. However, this negative relationship may be cause by a possibility of policy lag or time lags when government is enforcing a change in their policy. Government are likely not going to immediately react or make a change in policy when they notice an increase in public sentiment with Immigration topic. It will take times for the government to make a change in policy, or actually do something to the public about it.
+
+### 7.2. Limitations
+
+Through out my research, I had notice some limitation about my research and analysis:
+
+* Google Trends measures attention, but not opinion. A rise in search volume may indicate growing public interest in immigration, but it doesn’t tell us whether that interest is positive or negative.
+
+* The data captures search behavior, but it does not direct public action and the effect may not be as strong as voting, protesting, or advocating for immigration reform.
+
+* Regional Google Trends data is based on relative scores (0–100), not absolute search volume, which makes it difficult to compare true magnitude across locations.
+
+* The possibility of Time Lag from the government's enforcement may cause the result to become what we're not expecting. For example, time lag may have switched a positive relationship between public sentiment and apprehension encoutners into a negative relationship.
+
+### 7.3 Future Research
+
+For my future research, I wish I could incorporate sentiment analysis from social media or news articles to capture actual actions, not just attention. In addition, I would like to expand the enforcement data set to include more years which would  improve our longitudinal analysis. 
+
+
+### 7.4 Conclusion
+
+
+In conclusion, our research about the relationship with public sentiment and policy change has suggest that public sentiment about immigration may be connected to the shift in immigration enforcement, particular around 2012 to 2020. The observed patterns and relationship may imply that a increased in public attention could contribute to shaping federal responses and changes in the future, although factors like time lags may exist. In addition, the regional Google Trend's data also show how the conern about immigration is not uniform across the United State where some region have higher attention about the topic.
+
+Together, these results support the idea that immigration enforcement is shaped not only by the government's plan, but also by social dynamics as well, including media attention, public discourse, and regional pressures.
+
+## 8 Summary
+
+In summary, this research highlights a potential relationship between public sentiment and immigration enforcement in the US as a increase in public sentiment will later on cause the government to improve and enforce immigration policy that is fair to everyone. While the relationship between public sentiment and government's enforcement may not be specific (Negative relationship between both variables), we can still interpret that the public's interest still plays a huge role in government's policy change.
