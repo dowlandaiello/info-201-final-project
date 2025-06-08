@@ -106,7 +106,7 @@ library(purrr)
 library(tidyr)
 library(stringr)
 
-trendsdf <- read.csv("../../data_cleaned/google_trends/summarized.csv")
+trendsdf <- read.csv("./data_cleaned/google_trends/summarized.csv")
 trendsdf %>% head(5)
 ```
 
@@ -117,7 +117,7 @@ trendsdf %>% head(5)
 Here is an overview of the dataset:
 
 ```{r}
-electiondf <- read.csv("../../data_cleaned/harvard_election/countypres_2000-2020.csv")
+electiondf <- read.csv("./data_cleaned/harvard_election/countypres_2000-2020.csv")
 electiondf %>% sample_n(10)
 ```
 
@@ -206,10 +206,10 @@ library(ggmap)
     #select(county = county.y, swing, change_query_incidence, state) %>%
     #(\(df) df %>% mutate(lat_long = geocode(output = "latlon", location = paste(df$county, ", ", df$state), method = "census")))
 
-#with_lat_long %>% write.csv("../../data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv")
+#with_lat_long %>% write.csv("./data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv")
 #with_lat_long %>% head(10)
 
-with_lat_long <- read.csv("../../data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
+with_lat_long <- read.csv("./data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
     mutate(lat = lat_long.lat, long = lat_long.lon) %>%
     arrange(lat, long)
 with_corr <- with_lat_long %>%
@@ -270,7 +270,7 @@ library(ggmap)
     #select(county = county.y, swing, change_query_incidence, state) %>%
     #(\(df) df %>% mutate(lat_long = geocode(output = "latlon", location = paste(df$county, ", ", df$state), method = "census")))
 
-#with_lat_long %>% write.csv("../../data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv")
+#with_lat_long %>% write.csv("./data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv")
 #with_lat_long %>% head(10)
 ```
 
@@ -280,7 +280,7 @@ library(ggplot2)
 library(purrr)
 library(scales)
 
-with_lat_long.2 <- read.csv("../../data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
+with_lat_long.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
     mutate(lat = lat_long.lat, long = lat_long.lon) %>%
     arrange(lat, long)
 with_corr.2 <- with_lat_long.2 %>%
@@ -333,7 +333,7 @@ library(ggmap)
     #select(county = county.y, swing, change_query_incidence, state) %>%
     #(\(df) df %>% mutate(lat_long = geocode(output = "latlon", location = paste(df$county, ", ", df$state), method = "census")))
 
-#with_lat_long %>% write.csv("../../data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv")
+#with_lat_long %>% write.csv("./data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv")
 #with_lat_long %>% head(10)
 ```
 
@@ -343,7 +343,7 @@ library(ggplot2)
 library(purrr)
 library(scales)
 
-with_lat_long.2 <- read.csv("../../data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
+with_lat_long.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
     mutate(lat = lat_long.lat, long = lat_long.lon) %>%
     arrange(lat, long)
 with_corr.2 <- with_lat_long.2 %>%
@@ -384,11 +384,11 @@ However, it is relatively difficult to interpret search query incidence in any m
 In order to compare the relationship between query incidence and election results more explicitly, we generate a scatter plot of counties' electoral swing and search query incidence in the same election cycles.
 
 ```{r}
-tf.1 <- read.csv("../../data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
+tf.1 <- read.csv("./data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
     mutate(group = "04-12")
-tf.2 <- read.csv("../../data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
+tf.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
     mutate(group = "08-20")
-tf.3 <- read.csv("../../data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
+tf.3 <- read.csv("./data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
     mutate(group = "16-20")
 
 joined <- rbind(tf.1, tf.2, tf.3)

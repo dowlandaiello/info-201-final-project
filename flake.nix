@@ -62,7 +62,7 @@
             '';
             installPhase = ''
               mkdir $out
-              mv ./src/Report.html $out/
+              mv ./Report.html $out/
             '';
           };
         serve = path:
