@@ -1,0 +1,7 @@
+2023-ICFO_42034_Removals_FY13-12_LESA-STU_FINAL-[[:space:]]Redacted_raw.csv filter=lfs diff=lfs merge=lfs -text
+2023-ICFO_42034_Removals_FY16-14_LESA-STU_FINAL_Redacted_raw.csv filter=lfs diff=lfs merge=lfs -text
+2023-ICFO_42034_Removals_FY19-17_LESA-STU_FINAL_Redacted_raw.csv filter=lfs diff=lfs merge=lfs -text
+2023-ICFO_42034_Removals_FY23-20_LESA-STU_FINAL_Redacted_raw.csv filter=lfs diff=lfs merge=lfs -text
+2023-ICFO_42034_Removals_FY23-22_LESA-STU_FINAL_Redacted_raw.csv filter=lfs diff=lfs merge=lfs -text
+ICE_Removals_FY2012-FY2014-REDACTED_raw.csv filter=lfs diff=lfs merge=lfs -text
+ICE_Removals_FY2015-FY2023_YTD-REDACTED_raw.csv filter=lfs diff=lfs merge=lfs -text
