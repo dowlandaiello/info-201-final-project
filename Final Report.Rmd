@@ -1,0 +1,986 @@
+---
+title: "Analysis: Impact of Public Opinion on Immigration Policy in the United States"
+author: "Dowland Aiello, Roy Lin, Winston Qi"
+date: "2025-06-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  # echo = FALSE,      # don't show code
+  message = FALSE,   # suppress messages
+  warning = FALSE,   # suppress warnings
+  error = FALSE,     # suppress errors
+  results = 'hide'   # suppress printed output
+)
+```
+
+```{r}
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(stringr)
+library(fuzzyjoin)
+library(ggmap)
+library(maps)
+library(ggplot2)
+library(scales)
+library(fs)
+library(readr)
+library(tidyverse)
+```
+
+# 1. Abstract
+
+_Note: all files from this project are available on [GitHub](https://github.com/dowlandaiello/info-201-final-project)._
+
+Herein, we investigate the relationship between public opinion on immigration and U.S. immigration policy from 2004 to 2024. We establish Google trends search interest as a proxy measure of public opinion. We decompose the primary research question into 3 sub-questions measuring immigration policy by election outcomes, deportations, and encounters at the border. We establish a correlation between Google trends search interest for immigration and electoral swings over our selected time period. This correlation has grown more significant over time. The relationship between search interest and policy remains nuanced and relatively elusive.
+
+# 2. Introduction
+
+Immigration has become an increasingly divisive issue in the United States. For the 2024 election cycle, immigration emerged as a driving factor resulting in the loss of the Democratic party. 
+
+While popular discourse has made clear that the American voting public is skeptical of the government's approach towards immigration policy, it is unclear whether this skepticisim is empirically well-founded. Furthermore, the direct impact of voting on immigration policy is unclear. We establish three research questions in this paper to analyze how public opinion towards immigration has changed over time and shaped policy in the US:
+
+1. How is the change in public sentiment towards immigration (measured via Google trends interest) correlated with Presidential election results?
+2. How are presidential election results correlated with immigration policy (measured via deportations and encounters at the border)?
+3. How has public sentiment towards immigration in the US affected immigration policy over time (measured via deportations and encounters at the border)?
+
+In the modern internet-driven media ecosystem, Google trends may serve as a valuable measure of public sentiment towards immigration in the US. Though not an actual measure of opinion, these data could provide important geographical context not otherwise available with existing measures (e.g., public opinion polls).
+
+By answering these questions, we hope to provide insight to members of the media, voters, and policy-makers into the interplay between public opinion on immigration and policy.
+
+# 3. Data Sources
+
+We make use of three datasets in this paper.
+
+## 3.1 [Google trends data for "immigration" topic](https://trends.google.com/trends/explore?q=%2Fm%2F0cbx95&date=now%201-d&geo=US&hl=en)
+
+This dataset is available under Google's terms of service. Google Trends provides downloadable historical data by geographical region. However, it does not provide historical data for selections of multiple regions. We opted to download nation-wide county-level search interest averages for several periods of 4 years corresponding to election cycles.
+
+## 3.2 [Harvard county-level election data](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ)
+
+This dataset uses a CC0 1.0 Universal license. This license is very permissible. The dataset contains county-level election results by year, office, and party in the United States.
+
+## 3.3 [Border encounters and deportation data](https://deportationdata.org/data.html)
+
+This dataset also uses a CC0 1.0 Universal license. This license is very permissible. This dataset contains individual-level arrests and deportations by ICE and Border Patrol in the United States.
+
+All data were collected by Dowland Aiello.
+
+
+Note (Winston Qi): Manually loaded deportations and apprehensions datasets from the website of the original source, converting the xlsx files to csv files online. This was due to me having some technical issues with loading my groupmate's data on my end and being unable to resolve it before having to finish my work on my research question. Data still follows the  datasets mentioned above. 
+  
+# 4 Data
+
+## 4.1 Google Trends Data
+
+After merging and cleaning, this dataset contains 2,730 rows and 4 columns. Each row includes average search interest for "immigration" (`"query_incidence"`) ranked from 0 - 100 over an indicated timeframe (`"daterange"`) for a given county (`"DMA"`).
+
+* Date ranges are represented as strings in the form `"%YY-%YY"`.
+* Average query incidence is represented by an integer
+* County names are strings containing the name of the county and its state (in the form `"NY"`, `"CA"`).
+
+`NA` values are encoded explicitly as the value `NA`.
+
+## 4.2 County-level Election Data 
+
+In its raw form, this dataset contains 72,618 rows and 13 columns. Each row represents the number of votes for a candidate in a given county running under a specified party for a specified office in a specified year. Relevant columns include:
+
+* `year` - represented by a 4-digit integer
+* `state` - fully expanded string of the form `"ALABAMA"`
+* `county_name` - shortened uppercase county-name in the form `"AUTAUGA"`
+* `office` - string of the form `"US PRESIDENT"`
+* `party` - string of the form `"REPUBLICAN"`
+* `candidatevotes` - integer
+* `totalvotes` - integer
+
+`NA` values are encoded explicitly as the value `NA`.
+
+## 4.3 Border encounters and deportation data
+
+This dataset is extremely large and requires significant cleaning. Even after cleaning, a table with multiple hundreds of thousands of rows is produced. To enable file-sharing on GitHub, we separate this table into multiple compressed `.csv.bz` files with a maximum row count of 100,000 each. Each table contains 30 columns. Relevant columns include:
+
+* `Port of Departure` - string indicating which city, state an individual was deported in. This will be relevant to our analysis and worth merging with county names in the electoral and trends datasets.
+
+The border encounters dataset was similarly extraordinarily large. We break the table up into multiple tables with a maximum of 10,000 rows. Each table contains 9 columns. Relevant columns include:
+
+* `FY` - year of observation, formatted like such: `"FY%YYYY"`. This will be useful to calculate the change in border apprehensions over time.
+
+`NA` values are encoded explicitly as expected in both datasets.
+
+# 5. Method
+
+## 5.1 Data Cleaning
+
+See the [`scripts/`](https://github.com/dowlandaiello/info-201-final-project/tree/master/scripts) folder for utilities we wrote to clean our data. All data cleaning was performed by Dowland Aiello.
+
+### 5.1.1 Google Trends Data
+
+All Google trends data files were originally named `"geoMap*.csv."` We renamed each file to include a timestamp (`"query_immigration_metro_%YY-%YY"`) derived from timestamps in the column names of the files. We then merged all timeframes into a single table by deriving a `"daterange"` column from the file's name. See [timestamping](https://github.com/dowlandaiello/info-201-final-project/blob/master/scripts/timestamp_files.R) and [merging](https://github.com/dowlandaiello/info-201-final-project/blob/master/scripts/merge_google_trends.R) scripts for more.
+
+The data contained explicit `NA` values where no search interest was recorded for a county. We opted to remove `NA` values. Including `NA` values could potentially cause our visualizations to be unreadable due to a misleading scale.
+
+### 5.1.2 Harvard Election Data
+
+Harvard election data was filtered to only include rows where `office == "US PRESIDENT"`. No `NA` values were present in the relevant vote count and office columns. The data were fairly clean.
+
+### 5.1.3 ICE / CBP Data
+
+Apprehensions data were originally provided in `.xlsx` excel format. Furthermore, each table was multiple hundreds of thousands of rows long. We break each table into multiple compressed `.csv.bz` files in order to upload each table to GitHub. We elaborate more on data cleaning for this table in the relevant sections. These data span multiple hundreds of thousands of lines.
+
+## 5.2 Analysis
+
+To answer our three research questions, we created line plot and geographical visualizations of Google search interest, election results, and arrests / deportations by CBP and ICE.
+
+### 5.2.1 Search Interest and Electoral Analysis
+
+In our analysis, we aim to determine whether there is any correlation between search interest for "immigration" and the electoral swing. We restricted our analysis to the 2004 - 2012, 2008 - 2016, and 2016 - 2020 election cycles. To generate these visualizations, we calculate:
+
+* The electoral swing for the selected timeframes
+* The change in search query incidence for the selected timeframe.
+
+#### 5.2.1.1 Relevant Variables
+
+We make use of most variables in the electoral dataset. We discard redundant and miscellaneous columns:
+
+* `"state_po"` and `"county_fips"` - alternate names / geographical identifiers
+* `"version"` and `"mode"` - irrelevant metadata
+
+In order to calculate a per-county swing, we pivot the table to wide format.
+
+```{r}
+electiondf <- read.csv("./data_cleaned/harvard_election/countypres_2000-2020.csv")
+votestimeframe <- electiondf %>%
+  select(year, state, county_name, party, office, candidatevotes, totalvotes) %>%
+  filter(office == "US PRESIDENT") %>%
+  # Collapse votes in year n, n1 into columns n, n1
+  group_by(year, state, county_name, office, party) %>%
+  summarise(year, state, county_name, candidatevotes) %>%
+  ungroup() %>%
+  distinct(party, state, county_name, year, .keep_all = TRUE) %>%
+  select(party, state, county_name, year, candidatevotes) %>%
+  pivot_wider(id_cols = c(state, county_name), names_from = c(party, year), values_from = c(candidatevotes))
+```
+
+#### 5.2.1.2 Swing Calculation
+
+Taking advantage of the pivoted data, we can calculate a row-wise "electoral swing" by subtracting the relevant vote columns. For example, to calculate the swing from 2004 - 2008 for all counties, we can subtract `REPUBLICAN_2004` column from the `REPUBLICAN_2008`.
+
+In order to plot electoral results against search query interest, we calculate a "swing" similarly for the Google trends dataset using the `DMA` and `query_incidence` columns. We make use of a similar pivoting technique.
+
+```{r}
+trendsdf <- read.csv("./data_cleaned/google_trends/summarized.csv")
+trendsdf %>% head(5)
+
+change_time_period <- function(date1, date2) {
+  trendsdf %>%
+    pivot_wider(id_cols = c(DMA), names_from = daterange, values_from = query_incidence, values_fn = max) %>%
+    mutate("change_query_incidence" = .data[[date1]] - .data[[date2]])
+}
+```
+
+#### 5.2.1.3 Geocoding
+
+Notably, the Google trends dataset formats county names slightly differently from the electoral dataset. To account for this, we greedily match rows through fuzzy joining.
+
+```{r}
+swing_electoral_trends_period <- function(date1, date2) {
+    minstartdate <- str_split(date1, "-")[1]
+    maxenddate <- str_split(date2, "-")[2]
+
+    rep_start <- str_c(c("REPUBLICAN", minstartdate), collapse = "_")
+    rep_end <- str_c(c("REPUBLICAN", maxenddate), collapse = "_")
+    dem_start <- str_c(c("DEMOCRAT", minstartdate), collapse = "_")
+    dem_end <- str_c(c("DEMOCRAT", maxenddate), collapse = "_")
+
+    swing_county <- votestimeframe %>%
+        group_by(state, county_name) %>%
+        summarise(swing = .data[[rep_end]] / (.data[[rep_end]] + .data[[dem_end]]) - .data[[rep_start]] / (.data[[rep_start]] + .data[[dem_start]])) %>%
+        mutate(county = county_name) %>%
+        select(county, swing)
+
+    interest_swing <- change_time_period(date1, date2)
+    regex_inner_join(interest_swing, swing_county, by = "county") %>% filter(!is.na(change_query_incidence))
+}
+```
+
+However, in order to generate geographical plots, we must also generate coordinates for each county. We do so using the Google geocoding API.
+
+```{r}
+geocode <- function(df) {
+    register_google(key = Sys.getenv("GOOGLE_API_KEY"), write = FALSE)
+
+    df %>%
+        select(county = county.y, swing, change_query_incidence, state) %>%
+        (\(df) df %>% mutate(lat_long = geocode(output = "latlon", location = paste(df$county, ", ", df$state), method = "census")))
+}
+```
+
+### 5.2.2 ICE / CBP Analysis
+
+**<TODO: Roy stuff>**
+### 5.2.3
+
+#### Data Wrangling for Google Trends
+```{r}
+google <- read.csv("./data_cleaned/google_trends/summarized.csv") %>%
+    filter(!is.na(query_incidence)) %>%
+    mutate(Fiscal.Year = case_when(
+    daterange == "04-08" ~ 2008,
+    daterange == "08-12" ~ 2012,
+    daterange == "12-16" ~ 2016,
+    daterange == "16-20" ~ 2020,
+    daterange == "20-24" ~ 2024,
+    TRUE ~ NA_real_
+  ))
+
+google_summary <- google %>%
+  group_by(Fiscal.Year) %>%
+  summarise(avg_query_incidence = mean(query_incidence, na.rm = TRUE))
+
+```
+```{r}
+google_merge <- google %>%
+  mutate(Fiscal.Year = case_when(
+    daterange == "16-20" ~ 2020,
+    daterange == "20-21" ~ 2021,
+    daterange == "21-22" ~ 2022,
+    daterange == "22-23" ~ 2023,
+    TRUE ~ NA_real_
+  ))
+google_mergesummary <- google_merge %>%
+  group_by(Fiscal.Year) %>%
+  summarise(avg_query_incidence = mean(query_incidence, na.rm = TRUE))
+```
+
+In this steps, I transformed the Google Trends data by mapping each date range to a single fiscal year to align it with policy enforcement records. Then, I summarized public sentiment by calculating the average query incidence per year. Similarly, I grouped border enforcement data by fiscal year and encounter type, pivoting it into a wide format which is easier for comparison. These wrangling steps will allowed us to analyze both data sets on a same time scale, which would support our research in investigating the relationship between immigration sentiment and policy response.
+
+To align the data sets for analysis, I created two separate summaries from the Google Trends data. The first, google_summary, includes all years from 2008 to 2024 and was used for analyzing long-term trends in public sentiment and in different region as well. The second, google_mergesummary, was filtered to only include the years from 2020 to 2023, in order to match the timeframe of the apprehension dataset. This separation ensures that when merging both data sets, the years that are overlapped overlapping  are compared.
+
+#### 5.2.1.3 Data Cleaning for Border Encounters Data
+
+```{r}
+# Summarize enforcement data by year and type
+apprehension <- read.csv("./data_cleaned/sbo-encounters-fy20-fy23.csv")
+app_summary <- apprehension %>%
+  group_by(Fiscal.Year, Encounter.Type) %>%
+  summarise(total = sum(Encounter.Count, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = Encounter.Type, values_from = total)
+```
+
+
+This is the data cleaning step where I organized the border encounter's data set. I grouped the data set by Fiscal.Year and Encounter.Type to compute the total number of encounters for each type per year by summing encounter.count while removing any missing values. After that, I reshaped the data into a wide form so Encounter.Type became its own column with corresponding total count.
+
+#### 5.2.1.4 Merging Data
+```{r}
+combined_df <- left_join(google_mergesummary, app_summary, by = "Fiscal.Year")
+head(combined_df,5)
+```
+To analyze the relationship between public sentiment and immigration enforcement, I merged the two data set into one, where I merge Google Trends data and border encounter data using a left_join() on the shared variable Fiscal.Year as the google trends data set has been wrangled from date range to Fiscal Year. The merged summary data allowed me to combine the average search interest from Google Trends with the total number of apprehensions, expulsions, and inadmissible for each corresponding year.
+
+
+### 5.2.3 ICE, CBP, and Election Results Analysis
+
+#### 5.2.3.1 Dataset Loading for Manipulation
+
+#### 5.2.3.1.1 Election results 2000-2020 Dataset
+```{r}
+election_results <- read.csv("data_cleaned/harvard_election/countypres_2000-2020.csv")
+```
+
+#### 5.2.3.1.2 Annual apprehensions with place of origin (2000-2022)
+
+Made a for loop to extract the individual datasets from the aggregated data list, as the file names, being "Family Units apprehended along the SWB FY20XX Redacted_raw.csv", (20XX for their respective years) were fairly uniform. The datasets range from the years 2000-2022. Also made a dataframe for the original dimensions of each dataset, as can be seen below.
+The names of the variables directly listed in the dataset are "U.S. Border Patrol Nationwide Apprehensions ", then to "X",  "X.1" etc. up to "X.6" for the datasets between 2000-2006. The datasets between 2007-2015 have all the previous variables but add on a new variable, being "X.7"; datasets between 2016-2022 follow the same format as the 2007-2015 datasets along with variables "X.8" and "X.9". When manually looking at the datasets, these variables are all placeholder variable names, with the actual names written on line 6. There are numerous variables but I decided to focus only on the fiscal year or "FY" variable,  for the for similar reasons to the deportations datasets above of not being relevant enough to answering my research question. Each row represents an individual apprehended by the USBP and general relevant personal and geographical information gathered pertaining to them in a given year. 
+Dimensions for each dataset are shown below.
+
+
+```{r, load_app_data}
+years_app <- 2000:2022
+
+filepaths_app <- fs::dir_ls(
+  path = "data_cleaned/encounters_deportations/apprehensions_data")
+filepaths_app
+
+data_app <- list()
+
+for(i in seq_along(filepaths_app)) {
+  data_app[[i]] <- read_delim(file = filepaths_app[[i]])
+}
+
+data_app <- set_names(data_app, filepaths_app)
+
+names(data_app) <- paste0("app_", years_app)
+for (name in names(data_app)) {
+  assign(name, data_app[[name]])
+}
+head(data_app)
+
+print("Dimensions of Apprehension datasets (# of rows, # of columns) \n")
+
+dim_app <- lapply(data_app, dim)
+dim_app
+```
+
+
+#### 5.2.3.1.3 Removals (Deportations) Datasets (2011-2023)
+
+There are some breaks in the years (e.g missing 2017 and 2020-2021) due to no datasets for those years being present on the sourced website, but general trends in deportations should still be seen with the years that are available.
+Dataset variables are not entirely consistent, but opted to only use the Departure Date variable in each dataset as the only relevant variable for consistency and the utility of dates for which immigrants were deported. Originally planned for usage and analysis of variables like Birth Country, Citizenship Country, but decided against it as they didn't help answer my research question of how election results affected immigration policy as much as I initially thought, instead opting to focus on the number of deportations that happen in a given year to track the impact of immigration policies. Each row represents an individual that was deported by ICE within a certain period of time, with individual tracking, personal, and geographical information serving as identifiers for the individuals' cases.
+Dimensions for each dataset are shown below.
+```{r}
+years_dep <- c("11_12", "13", "15", "16_14", "19_17", "23_22")
+
+filepaths_dep <- fs::dir_ls("data_cleaned/encounters_deportations/deportations_data")
+filepaths_dep
+
+data_dep <- list()
+
+for(i in seq_along(filepaths_dep)) {
+  data_dep[[i]] <- read_delim(file = filepaths_dep[[i]])
+}
+
+data_dep <- set_names(data_dep, filepaths_dep)
+
+
+names(data_dep) <- paste0("dep_", years_dep)
+
+for (name in names(data_dep)) {
+  assign(name, data_dep[[name]])
+}
+
+print("Dimensions of Deportation datasets (# of rows, # of columns) \n")
+
+dim_dep <- lapply(data_dep, dim)
+dim_dep
+```
+
+### 5.2.3.2 Date Separation Function
+Created a generic function to separate the year column of a dataframe into a date format when needed, later discarded other newly created date columns for just year, as I wanted to capture larger trends for the bigger picture regarding periods between elections rather than a day by day/month by month basis.
+```{r , message = FALSE}
+date_sep <- function(data, date_col) {
+  mutate(data, date = as_date({{date_col}}, format = "%m/%d/%Y")) %>%
+  mutate(year = as.numeric(format(date, format = "%Y")),
+         month = as.numeric(format(date, format = "%m")),
+         day = as.numeric(format(date, format = "%d"))) %>% 
+    select(year, month, day, date) %>% 
+    na.omit()
+}
+```
+
+### 5.2.3.2 Election Results Filtering  
+
+Checked to make sure that there wasn't NA values or other substutionary values in the total votes, then summarized the Democrat and Republican total votes by year and put them into one dataframe. Only concerned with Republicans and Democrats, as they are the 2 main parties that win US elections and the portion of votes from other parties are not significant enough to affect any election results.
+Pivoted to wide to make the voting totals per year by party easier to interpret visually, then included a voting difference variable. The aggregate total votes for each party by year helps quickly see and compare the total amount of votes that each party got, while the difference helps see the general party voting trends in the United States and which party is winning the popular vote.
+```{r, message=FALSE}
+range(election_results$candidatevotes)
+
+dem_votes <- election_results %>% 
+  select(year, party, candidatevotes) %>% 
+  na.omit() %>% 
+  filter(party %in% "DEMOCRAT") %>% 
+  group_by(year, party) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+head(dem_votes)
+
+rep_votes <- election_results %>% 
+  select(year, party, candidatevotes) %>% 
+  na.omit() %>% 
+  filter(party %in% "REPUBLICAN") %>% 
+  group_by(year, party) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+head(rep_votes)
+
+total_votes_by_yr <- rbind(dem_votes, rep_votes)
+head(total_votes_by_yr)
+
+wide_votes <- total_votes_by_yr %>% 
+  pivot_wider(id_cols = year, names_from = party, values_from = tot_votes)
+head(wide_votes)
+
+vote_diff_by_yr <- wide_votes %>% 
+  mutate("Vote Difference (Republican minus Democrat)" = REPUBLICAN - DEMOCRAT)
+head(vote_diff_by_yr)
+```
+
+
+### 5.2.3.2 Border Status Differentiation
+
+Used cleaning methods of above section except creating new categorical variables/columns of border status, border state, etc. to determine a state' status of being on the border of the United States or not and differentiating the types of votes through border and political party categories. These distinctions will help in answering one of the sub questions of whether people in border states will be more likely to vote Republican for their immigration policies due to immigration being a more tangible and closer issue to them - through comparing the voting trends of border and non-border states.
+``` {r}
+border_states <- c("MAINE", "NEW HAMPSHIRE", "VERMONT", "NEW YORK", "PENNSYLVANIA", "OHIO", "MICHIGAN", "MINNESOTA", "NORTH DAKOTA", "MONTANA", "IDAHO", "WASHINGTON", "ALASKA", "CALIFORNIA", "NEW MEXICO", "ARIZONA", "TEXAS")
+
+bor_status <- election_results %>% 
+  mutate(border_state = state %in% border_states) 
+bor_status
+
+dem_bor_votes <- bor_status %>% 
+  select(year, party, candidatevotes, border_state) %>% 
+  na.omit() %>% 
+  filter(party %in% "DEMOCRAT") %>% 
+  group_by(year, party, border_state) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+dem_bor_votes
+
+rep_bor_votes <- bor_status %>% 
+  select(year, party, candidatevotes, border_state) %>% 
+  na.omit() %>% 
+  filter(party %in% "REPUBLICAN") %>% 
+  group_by(year, party, border_state) %>% 
+  summarize(tot_votes = sum(candidatevotes))
+rep_bor_votes
+
+total_bor_votes_by_yr <- rbind(dem_bor_votes, rep_bor_votes) 
+total_bor_votes_by_yr
+
+wide_bor_votes <- total_bor_votes_by_yr %>% 
+  pivot_wider(id_cols = year, names_from = c(party, border_state), values_from = tot_votes)
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "DEMOCRAT_FALSE"] <- "Non-Border: Democrat"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "DEMOCRAT_TRUE"] <- "Border: Democrat"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "REPUBLICAN_FALSE"] <- "Non-Border: Republican"
+colnames(wide_bor_votes)[colnames(wide_bor_votes) == "REPUBLICAN_TRUE"] <- "Border: Republican"
+wide_bor_votes <- wide_bor_votes %>% 
+  mutate("Border Vote Difference" = `Border: Republican` -`Border: Democrat`) %>% 
+  mutate("Non-Border Vote Difference" = `Non-Border: Republican` - `Non-Border: Democrat`) 
+wide_bor_votes
+
+long_df_bor <- wide_bor_votes %>% 
+  pivot_longer(cols = c("Non-Border: Democrat", "Border: Democrat",
+                        "Non-Border: Republican", "Border: Republican",
+                        "Border Vote Difference", "Non-Border Vote Difference"),
+                 names_to = "Number of State Votes:", names_transform = list(n = as.integer),
+                 values_to = "number") %>% 
+  na.omit()
+long_df_bor
+```
+
+
+### 5.2.3.3 Deportations Filtering and Merging
+
+Selected only the departure dates of for consistency and the dates for which immigrants were deported. Discarded other variables like Birth Country or Citizenship Country of immigrants. Such variables were originally planned for usage and analysis but later on I decided that they didn't help answer my research question of how election results affected immigration policy as much as I initially thought, instead opting to focus on the total number of deportations that happen in a given year to track the impact of immigration policies. Used the date_sep function to filter out the dates for each of the deportations in the datasets, then binded them together into a total deportations dataset, using sample_n and head to check that it is good. Discarded the complete date, month, and day portions created by the date_sep function to keep the year, and counted the # of rows each year had. There were some breaks in the years (e.g missing 2017 and 2020-2021) due to no datasets for those years being present in the source that pertained to the same category, but decided to continue general trends in deportations can still be seen with the years that are available.
+```{r}
+totalice_yr11_12 <- dep_11_12 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>%
+  date_sep(`ERO-LESA Statistical Tracking Unit`)
+
+totalice_yr13 <- dep_13 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`) 
+
+totalice_yr15 <- dep_15 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`)
+ 
+totalice_yr16_14 <- dep_16_14 %>% 
+  select(`ERO-LESA Statistical Tracking Unit`) %>% 
+  date_sep(`ERO-LESA Statistical Tracking Unit`) 
+
+totalice_yr19_17 <- dep_19_17 %>% 
+  select(...2) %>% 
+  date_sep(...2) 
+
+totalice_yr23_22 <- dep_23_22 %>% 
+  select(...3) %>% 
+  date_sep(...3)
+
+totalice_by_year <- rbind(totalice_yr11_12, totalice_yr13, totalice_yr15, totalice_yr16_14, totalice_yr19_17, totalice_yr23_22) %>% 
+  select(date, year, month, day)
+totalice_by_year
+head(totalice_by_year)
+sample_n(totalice_by_year, 20)
+
+icedeports_by_yr <- totalice_by_year %>% 
+  select(year) %>% 
+  na.omit() %>% 
+  count(year)
+
+colnames(icedeports_by_yr)[colnames(icedeports_by_yr) == "n"] <- "Deportations"
+icedeports_by_yr
+```
+
+
+### 5.2.3.4 Apprehensions Filtering and Merging
+
+Similarly to the above section, only selected/filtered for the year and discarded other variables/values for general yearly apprehension trends that correspond to immigration policies' impacts/enforcements. The values with year in the variable "U.S. Border Patrol Nationwide Apprehensions" did not include month, day, or time, so filtered for the years through checking for the string "FY2", combining all the cleaned datasets, then removing the "FY" suffix to leave just the year and counting up the number of apprehensions per year. 
+```{r , message = FALSE}
+app_00_06 <- rbind(app_2000, app_2001, app_2002 , app_2003, app_2004, app_2005, app_2006)
+app_00_06 <- app_00_06 %>%
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>%
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+app_07_15 <- rbind(app_2007, app_2008, app_2009, app_2010, app_2011, app_2012, app_2013, app_2014, app_2015)
+app_07_15 <- app_07_15 %>% 
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>% 
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+app_16_22 <- rbind(app_2016, app_2017, app_2018, app_2019, app_2020, app_2021, app_2022)
+app_16_22 <- app_16_22 %>% 
+  select(`U.S. Border Patrol Nationwide Apprehensions `) %>% 
+  filter(str_detect(`U.S. Border Patrol Nationwide Apprehensions `, "FY2"))
+
+totalapp_by_year <- rbind(app_00_06, app_07_15, app_16_22)
+
+totalapp_by_year <- str_replace_all(totalapp_by_year$`U.S. Border Patrol Nationwide Apprehensions `, "[FY]", "") %>% 
+  data.frame() 
+colnames(totalapp_by_year)[colnames(totalapp_by_year) == "."] <- "year"
+
+apps_by_yr <- totalapp_by_year %>% 
+  select(year) %>% 
+  na.omit() %>% 
+  count(year) 
+
+colnames(apps_by_yr)[colnames(apps_by_yr) == "n"] <- "Apprehensions at the Border"
+apps_by_yr <- apps_by_yr %>% 
+  transform(year = as.integer(year)) 
+
+apps_by_yr
+```
+
+
+### 5.2.3.5 Aggregate Dataset Merging into Long Format
+
+This code chunk is for the merging, arranging, and pivoting to long form the core and cleaned/reworked datasets for intended visual graphs and their subsequent analyses.
+```{r}
+app_dep_votes <- rbind(wide_votes, apps_by_yr, icedeports_by_yr, vote_diff_by_yr) %>% 
+  arrange(year)
+app_dep_votes
+
+longdf_A_D_V <- app_dep_votes %>% 
+  pivot_longer(cols = c("DEMOCRAT", "REPUBLICAN", "Apprehensions at the Border",
+                        "Deportations", "Vote Difference (Republican minus Democrat)"),
+                 names_to = "Number of:", names_transform = list(n = as.integer),
+                 values_to = "number") %>%
+  na.omit()
+longdf_A_D_V
+```
+
+## 5.2.4 Analysis
+
+For my analysis, I decided to first create some graphs/plots to visually analyze the data gathered before deciding on any further potential or more complex analysis methods (e.g. slopes, linear regression, etc.) were needed. If the graphs clearly showed certain trends like a positive or negative slope, or didn't correlate, then such methods wouldn't be needed for further confirmation.
+
+I mainly stuck to line graphs due to the heavily numerical aspects of my data, with the exception being the bar plot regarding the election results.
+
+#### 5.2.4.1 Aggregate Line Graph of all Datasets
+
+I first attempted to compare the number of deportations and apprehensions to votes by year separately, and so created two line graphs to see the general voting trends  against the immigration related data. At a glance, it seems fairly hard to distinguish any trends given the sizable numerical gap between the election results and deportations/apprehensions, with the later two seemingly having close to no fluctuations or changes in their number on the scale currently alloted in the graph by default. In fact, it seems like both look like they are extremely close to 0, which is not true at all considering the values gleaned from above. Additionally, there are several points where data cuts off, like how the election results cuts off at 2020, or how deportations has much less datapoints to go off of compared to the other data, not to mention how it has some missing years. I decided to skip over the missing years to be able to see general trends in the data.
+
+As such, these observations led me to break down the graphs into more smaller, more spaced out comparisons of datasets, usually only taking a a couple at most in my results down below.
+
+```{r}
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Deportations", "Vote Difference (Republican minus Democrat)", "REPUBLICAN", "DEMOCRAT")) %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Deportations and Votes, by Year")
+
+
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border", "Vote Difference (Republican minus Democrat)", "REPUBLICAN", "DEMOCRAT")) %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions and Votes, by Year")
+```
+
+
+# 6. Results
+
+## 6.1 Search Query Interest vs Electoral Swing
+
+### 6.1.1 Geographical Visualization
+
+Using our manipulated dataset from section _5.2_, we generate maps plotting the swing in search interest vs the electoral swing per county in the United States. We do so for the 2004 - 2012, 2008 - 2016, and 2016 - 2020 election cycles. Note that we use a cached copy of our geocoded dataset for convenience and reproducibility purposes.
+
+#### 6.1.1.1 Executive Visualization Decisions
+
+In our geographical visualization, we opted to represent electoral swing with a diverging color scale. We represent a "right" swing with a red hue, while we represent a "left" swing with a blue hue. This choice is relatively standard among electoral maps. We use grey to represent no change. A diverging color scale is a natural choice to represent our results, as it gives zero-values a meaningful interpretation.
+
+#### 6.1.1.2 Visualizations
+
+```{r, fig.height = 12, fig.width = 16.8}
+with_lat_long <- read.csv("./data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
+    mutate(lat = lat_long.lat, long = lat_long.lon) %>%
+    arrange(lat, long)
+with_corr <- with_lat_long %>%
+    filter(!is.na(change_query_incidence) & !is.na(swing))
+
+plot <- ggplot(data = map_data("state") %>% filter(long > -140)) +
+  geom_polygon(aes(x = long, y = lat, group = group), color = "white") +
+  geom_point(data = with_corr %>% filter(long > -140), aes(x = long, y = lat, color = as.numeric(swing), alpha = as.numeric(change_query_incidence), size = as.numeric(change_query_incidence))) +
+  scale_colour_gradient2(low = "blue", high = "red", mid = "gray", midpoint = 0) +
+  labs(
+    title = "Change in Search Interest for \"Immigration\" vs Electoral Swing from 2004 - 2012",
+    color = "Swing in Election Results (Red = Became More Republican)",
+    size = "Change in Search Interest for \"Immigration\"",
+  ) +
+  guides(alpha = "none") +
+  scale_alpha(range = c(0.05, 1), limits = c(-30, 20)) +
+  scale_size_binned(n.breaks = 5, range = c(0.25, 5), limits = c(-50, 100)) +
+  theme(text = element_text(size = 13), legend.text = element_text(size = 8), legend.position = "bottom")
+
+ggsave("election_04_to_2012_heat_map_query_change_election_result.png", bg = "white")
+
+plot
+```
+
+```{r, fig.height = 12, fig.width = 16.8}
+with_lat_long.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
+    mutate(lat = lat_long.lat, long = lat_long.lon) %>%
+    arrange(lat, long)
+with_corr.2 <- with_lat_long.2 %>%
+    filter(!is.na(change_query_incidence) & !is.na(swing))
+
+with_corr.2 %>% select(change_query_incidence, swing, lat, long) %>% head(10)
+
+plot <- ggplot(data = map_data("state") %>% filter(long > -140)) +
+  geom_polygon(aes(x = long, y = lat, group = group), color = "white") +
+  geom_point(data = with_corr.2 %>% filter(long > -140), aes(x = long, y = lat, color = as.numeric(swing), alpha = as.numeric(change_query_incidence), size = as.numeric(change_query_incidence))) +
+  scale_colour_gradient2(low = "blue", high = "red", mid = "gray", midpoint = 0) +
+  labs(
+    title = "Change in Search Interest for \"Immigration\" vs Electoral Swing from 2008 - 2016",
+    color = "Swing in Election Results (Red = Became More Republican)",
+    size = "Change in Search Interest for \"Immigration\"",
+    ) +
+  guides(alpha = "none") +
+  scale_alpha(range = c(0.05, 1), limits = c(-30, 20)) +
+  scale_size_binned(n.breaks = 5, range = c(0.25, 5), limits = c(-50, 100)) +
+  theme(text = element_text(size = 13), legend.text = element_text(size = 8), legend.position = "bottom")
+
+
+ggsave("election_08_to_2020_heat_map_query_change_election_result.png", bg = "white")
+
+plot
+```
+
+
+```{r, fig.height = 12, fig.width = 16.8}
+with_lat_long.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
+    mutate(lat = lat_long.lat, long = lat_long.lon) %>%
+    arrange(lat, long)
+with_corr.2 <- with_lat_long.2 %>%
+    filter(!is.na(change_query_incidence) & !is.na(swing))
+
+with_corr.2 %>% select(change_query_incidence, swing, lat, long) %>% head(10)
+
+plot <- ggplot(data = map_data("state") %>% filter(long > -140)) +
+  geom_polygon(aes(x = long, y = lat, group = group), color = "white") +
+  geom_point(data = with_corr.2 %>% filter(long > -140), aes(x = long, y = lat, color = as.numeric(swing), alpha = as.numeric(change_query_incidence), size = as.numeric(change_query_incidence))) +
+  scale_colour_gradient2(low = "blue", high = "red", mid = "gray", midpoint = 0) +
+  labs(
+    title = "Change in Search Interest for \"Immigration\" vs Electoral Swing from 2016 - 2020",
+    color = "Swing in Election Results (Red = Became More Republican)",
+    size = "Change in Search Interest for \"Immigration\"",
+    ) +
+  guides(alpha = "none") +
+  scale_alpha(range = c(0.05, 1), limits = c(-30, 20)) +
+  scale_size_binned(n.breaks = 5, range = c(0.25, 5), limits = c(-50, 100)) +
+  theme(text = element_text(size = 13), legend.text = element_text(size = 8), legend.position = "bottom")
+
+
+ggsave("election_16_to_2020_heat_map_query_change_election_result.png", bg = "white")
+
+plot
+```
+
+Notable in the above maps are:
+
+* Swing states
+* Polarization of elections over time
+
+However, it is relatively difficult to interpret the relationship between search query incidence and the electoral swing.
+
+### 6.1.1.2 Alternative Visualization: Scatter Plot w/ Linear Regression
+
+In order to compare the relationship between query incidence and election results more explicitly, we generate a scatter plot with a linear regression of counties' electoral swing and search query incidence in the same election cycles.
+
+```{r}
+tf.1 <- read.csv("./data_cleaned/swing_interest_vs_electoral_04_12_lat_long.csv") %>%
+    mutate(group = "04-12")
+tf.2 <- read.csv("./data_cleaned/swing_interest_vs_electoral_08_20_lat_long.csv") %>%
+    mutate(group = "08-20")
+tf.3 <- read.csv("./data_cleaned/swing_interest_vs_electoral_16-20_lat_long.csv") %>%
+    mutate(group = "16-20")
+
+joined <- rbind(tf.1, tf.2, tf.3)
+
+joined %>%
+    group_by(group) %>%
+    ggplot(aes(x = change_query_incidence, y = swing, color = factor(group))) +
+    labs(
+        title = "Change in Search Interest for \"Immigration\" vs Electoral Swing",
+        color  = "Date Range (years)",
+        x  = "Change in Search Interest for \"Immigration\"",
+        y = "Electoral Swing"
+    ) +
+    geom_point(size = 2, alpha = 0.5) +
+    geom_smooth(method = lm)
+```
+
+Note that the linear regression slope is positive in both the 2008 - 2020 and 2016 - 2020 election cycles. The slope appears slightly steeper in the 2016 - 2020 election cycle.
+
+## 6.2 ICE / CBP Analysis
+
+### 6.2.1 Plot 1: Public Sentiment Over Time
+```{r plot-sentiment}
+ggplot(google_summary, aes(x = Fiscal.Year, y = avg_query_incidence)) +
+  geom_line(color = "steelblue", size = 1.2) +
+  labs(title = "Public Sentiment (Search Interest) Over Time",
+       x = "Fiscal Year", y = "Average Search Index") 
+```
+  This diagram shows the average Google Search interest in immigration across different years. From the data, we can observe that public attention peaked around 2012 and 2020, which aligns with the major election cycle of Obama and Trump. The trends have highlighted how immigration has become an important topic during the politically charged period but lost attention afterward. In addition, after 2020, we can observe a decline in the public's interest in the topic of immigration which can likely be cause becuase of the increase of public attention on Covid 19.
+
+
+
+### 6.2.2 Plot 2: Immigration Enforcement Over Time
+```{r plot-enforcement}
+app_long <- app_summary %>%
+  pivot_longer(cols = c(Apprehensions, Expulsions, Inadmissibles),
+               names_to = "Type", values_to = "Count")
+
+ggplot(app_long, aes(x = Fiscal.Year, y = Count, color = Type)) +
+  geom_line(size = 1.2) +
+  labs(title = "Immigration Enforcement Encounters Over Time",
+       x = "Fiscal Year", y = "Number of Encounters",
+       color = "Enforcement Type") +
+  scale_color_manual(values = c("Apprehensions" = "tomato",
+                                "Expulsions" = "orange",
+                                "Inadmissibles" = "purple")) 
+```
+
+This line graph shows us the three different types of U.S Immigration enforcement action which include: Apprehensions, expulsions and inadmissible over the four fiscal years from 2020-2023. From the data, we can observe a rose in apprehension and has surpassed the rate of expulsion by 2022, which suggest a shift in enforcement strategy by the government. In additionaly, Inadmissble entris has also increased during this period, which indiccate a growing challenges at the broader for legal immigrant to enter.
+
+
+### 6.2.3
+
+```{r}
+ggplot(combined_df, aes(x = avg_query_incidence, y = Apprehensions)) +
+  geom_point(color = "tomato", size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Sentiment vs Apprehensions (2020–2023)",
+    x = "Average Google Search Interest",
+    y = "Number of Apprehensions"
+  ) 
+
+```
+This scatter plot shows a clear negative correlation between average Google search interest in immigration and the number of apprehensions at the border. As public attention increases, enforcement activity appears to decline. This trend may suggest a lagged response in policy implementation or indicate that heightened public discourse influences shifts in enforcement priorities over time. 
+
+### 6.2.4 Additional Analysis with Google Trends
+
+```{r}
+google%>%
+  group_by(daterange) %>% 
+  top_n(5,query_incidence)
+```
+
+In additionly to the relationship between public sentiment and apprehension, it is also important to understand how the Google's trend data is built by region in the United State which some states and city may have a higher interest in the topic of immigration. The data above has shows the the top 5 quiery incidence scores with each date range from 2004-2024. In the Google's Trend data set, although some of the designated market area is listed as NA, however either the region or the city is provided.
+
+
+```{r}
+election_data <- google %>%
+  filter(DMA %in% c("Miami-Ft. Lauderdale FL", "Yuma AZ-El Centro CA",
+                    "Harlingen-Weslaco-Brownsville-McAllen TX", 
+                    "Washington DC (Hagerstown MD)")) %>%
+  filter(daterange %in% c("04-08", "08-12", "12-16", "16-20")) %>% # Filter for the desired date ranges
+  mutate(election_year = case_when(
+    daterange == "04-08" ~ "2004",
+    daterange == "08-12" ~ "2008",
+    daterange == "12-16" ~ "2012",
+    daterange == "16-20" ~ "2016",
+    TRUE ~ NA_character_
+  ))
+
+ggplot(election_data, aes(x = factor(election_year), y = query_incidence, color = DMA, group = DMA)) +
+  geom_line() +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  labs(title = "Immigration Search Trends Over Time", y = "Search Interest", x = "Election Year") +
+  facet_wrap(~DMA)
+```
+
+Through this multiple plots that shows a diverse location of the immigration related google search interest across four different Distinct in the US, we can observe that different city and region have different interest in the topic of immigration. From the graph, we can observe that Washington DC (Hagerstown, MD) has shows a steady rise in intersest, peaking in 2016, which reflect a increase in policy discourages in the nation's capital. In contrast, region like Yuma,AZ-El centro, CA has experience a sharp decline after 2004 to the topic of Immigration. This chats highlight how public sentiment around immigration is not uniform throughout the United State, where different region may put more attention on this topic than others.
+
+## 6.3 ICE, CBP, Election Results, National Border Voting, and Voting Difference Analysis
+
+I explored correlations visually (via line and scatter plots) and descriptively, and made adjustments for improved visual comparisons when appropriate (e.g. number scalings, filtering certain years, etc.)
+
+#### 6.3.1 Election Results (Popular Vote)
+
+As can be seen, Democrats won the majority of popular votes between 2000-2020, with the Republicans only winning in 2004 over the Democrats. Initially between 2000-2004, the amount of votes between the parties are fairly close, but afterwards the Democrats maintained the lead with several millions of votes for each election.
+```{r}
+total_votes_by_yr %>% 
+  mutate(year = as.character(year)) %>% 
+  ggplot(aes(x = year, y = tot_votes)) +
+  geom_col(aes(fill = party), stat = "identity", position = "dodge") +
+  labs(title = "Election Results from Total Party Candidate Votes", 
+       y = "Number of Candidate Votes")  +
+   scale_y_continuous(name="Number of Candidate Votes", labels = comma) +
+  scale_fill_manual(values = c("#03bfc4", "#f7766d"), 
+                    breaks = c("DEMOCRAT", "REPUBLICAN"))
+```
+
+#### 6.3.2 Total Vote Differences (Republican - Democrat)
+
+The line graph shows that there was an initial trend in Republican Voting like the previous barplot suggested, but that the trend flipped on its head to Democrat lead in 2008. The popular vote has maintained democrat for all but 2004, but was still overcome in 2000, 2004, and 2016, partially indicated as peaks in Republican voting during those years.
+
+``` {r}
+app_dep_votes %>%
+  select(year, `Vote Difference (Republican minus Democrat)`) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = year, y = `Vote Difference (Republican minus Democrat)`,
+             color = `Vote Difference (Republican minus Democrat)`)) +
+  geom_point(size = 2) +
+  geom_line(aes(group=1)) + 
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Voting Difference (Rep. - Dem.), by Year") +
+  scale_color_gradient(labels = comma,
+    low = "blue",
+    high = "red")
+```
+
+#### 6.3.3 Apprehensions vs Deportations 
+
+While I did start with a plot including the voting difference with apprehensions and deportations, the data for the vote difference was not as applicable or generalizable as I thought to the data regarding immigration enforcement. The lengths between each election year was fairly wide (being 4 years), making it hard to try and find direct correlation between the more frequently changing values of the other two. Additionally, the numerical difference was still very wide despite the reduction in scale compared to my inital graphs of all the datasets as one graph, which restricts the degree of comparisons/analysis visually. Even when considering apprehensions, which had more years of data than deportations, it was hard to see any changes from election results reflected into apprehensions.
+
+```{r}
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border",
+  "Deportations", "Vote Difference (Republican minus Democrat)")) %>% 
+  na.omit() %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+So I decided to focus on just comparing apprehensions and deportations. 
+
+```{r}
+longdf_A_D_V %>% 
+  filter(`Number of:`  %in% c("Apprehensions at the Border", "Deportations")) %>% 
+  na.omit() %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+The scaling is better, but deportations only filled less than half the years that apprehensions had data for, so I decided to filter for the years that had data for both apprehensions and deportations to be able to analyze the data better.
+
+Created a new dataframe within those requirements to get this graph:
+
+```{r}
+app_vs_dep <- merge(apps_by_yr, icedeports_by_yr) %>% 
+  arrange(year)
+app_vs_dep
+
+long_df_dep_app <- app_vs_dep %>% 
+    pivot_longer(cols = c("Apprehensions at the Border", "Deportations"),
+                 names_to = "Number of:", names_transform = list(n = as.integer),
+                 values_to = "number") %>% 
+  na.omit()
+long_df_dep_app
+
+long_df_dep_app %>% 
+  mutate(year = as.integer(year))%>% 
+  ggplot(aes(x = year, y = number, col = `Number of:`)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Apprehensions at the Border and Deportations, by Year")
+```
+
+Asides from the sharp drop in both after 2019 and affecting a couple years beyond it, most likely due to the COVID 19 Pandemic, there did not seem to be any significant correlation/trend between apprehensions and deportations. The spike in both around 2019 may be attributed to the ICE Raids and the raids carried out under the Trump Administration  at the time. Deportations seem to generally trend downwards from 2012-2023, and the same can be said for apprehensions in regards to its longer timeframe (2000-2022). However, in the shorter timeframe (2010-2022), apprehensions seemed to be going up.
+
+
+#### 6.3.4 Border and Non-Border Votes
+
+Here I simply compared the total number of votes for each party that border and non-border states had, in order to see whether or not a state being on the US national border (including both Mexico and Canada) had an impact on whether they voted more Republican. This was under the initial assumption of immigration potentially being a more impactful/influential topic in regards to a state's geographical proximity to the border and potentially harsher immigration policies supported/enacted as a result.
+
+```{r}
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Non-Border: Democrat", "Border: Democrat",
+                        "Non-Border: Republican", "Border: Republican")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Votes, by Year", 
+       y = "Number of Votes")
+```
+
+Plotting the voting difference (Republican - Democrat) by border status: 
+
+```{r}
+long_df_bor %>% 
+  filter(`Number of State Votes:` %in% c("Border Vote Difference", "Non-Border Vote Difference")) %>% 
+  ggplot(aes(x = year, y = number, col = `Number of State Votes:`)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_y_continuous(name="Number of Votes", labels = comma) +
+  labs(title = "Border vs Non-Border State Voting Difference (Rep - Dem), by Year", 
+       y = "Number of Votes")
+```
+
+From the graphs, border states do not seem to be more likely to vote Republican regarding their assumed increased involvement with immigration based on geographical location; follow similar voting trends in regards to non-border states. In fact, non-border states seem to vote more Republican at times. 
+
+#### 6.3.5 Analysis Summary
+
+In summary, the key findings were:
+
+- Election Trends: Democrats won the popular vote in most years between 2000–2020, but not always the presidency (e.g., 2000, 2004, and 2016).
+
+- Deportation Trends: Deportations generally decreased from 2012–2023, with a sharp drop post-2019.
+
+- Apprehensions: Sharp rise in 2019, coinciding with Trump administration raids, and a similar sharp drop to deportations during COVID.
+
+- Border vs. Non-Border States: Voting patterns do not significantly differ between these groups and instead have very similar voting trends, contradicting assumption that border states would lean more Republican.
+
+In all, our findings illustrate that the initial assumption of election results and border state voting patterns correlating with or predicting immigrant enforcement activity/policy was not true, with the winning party not necessarily following the presumed enforcement patterns,  and border states not voting particularly different compared to non-border states.
+
+
+# 7. Discussion
+
+## 7.1 Influence of Public Opinion on Electoral Outcomes
+
+Our analysis reveals that there is an increasingly strong correlation between search interest for immigration and the electoral swing in elections from 2004 - 2020 in the US. We confirm this finding using a map visualization and linear regression analysis. Our linear regression analysis indicates statistically significant correlation between the explanatory and dependent variables.
+
+## 7.2 Influence of Public Opinion on Immigration Law Enforcement Activity
+
+From my research, I had notice a negative relationship between the search interest in immigration and immigration apprehension which is what I didn't expect at the start. Specifically, from the period of 2020-2023, an decrease in the search interest has cause the apprehension encounters to increase over the 4 years which was what our team wasn't expecting. This implies that rising attention or conern is not promptly associated with an increase in enforcement. However, this negative relationship may be cause by a possibility of policy lag or time lags when government is enforcing a change in their policy. Government are likely not going to immediately react or make a change in policy when they notice an increase in public sentiment with Immigration topic. It will take times for the government to make a change in policy, or actually do something to the public about it.
+
+## 7.3 Influence of Election Results on Immigration Law Enforcement Activity
+Our analysis reveals that presidential election results do not appear to directly correlate or predict immigration enforcement activity as initially thought. While Republican administrations are generally assumed to favor stricter immigration policy, actual deportation and apprehension figures vary more erratically from year to year and seem to be influenced by more than just electoral results, such as events like COVID-19. The spike in apprehensions and deportations alike in 2019 is a clear outlier likely driven by targeted ICE activity and public raids, but generally both seem to be declining. The COVID-19 pandemic appears to have migration and enforcement alike, given the decrease in both apprehensions and deportations. Additionally, whether a state is on the US's national borders does not seem to show an influence in Republican voting as originally hypothesized, and have similar voting trends to states that are not on the border.
+
+## 7.4 Limitations
+
+### 7.4.1 Research Question 1
+
+Of note, our chosen metric of public opinion for immigration measures only magnitude, not directionality (like/dislike). Furthermore, we have no mechanism for establishing a causal relationship between search interest and election results due to confounding variables (most voters are presumably not single-issue voters).
+
+### 7.4.1 Research Question 2
+In regards to election results and immigration enforcement, the years did not align perfectly across datasets, and there were some missing years, which may have been able to give more applicability and further insight/analysis into the yearly trends if not absent. Relevant events (e.g., Title 42 expulsions from COVID 19) are not explicitly captured or mentioned within the data, making it difficult to factor in the potential outside interference of them and limiting the analysis that can be made without such contexts, and our research does not aim to extrapolate concrete causality within the data, merely observe and highlight trends. 
+
+### 7.4.1 Research Question 3
+The Google Trends dataset only measures attention, not opinion and a rise in search volume may indicate growing public interest in immigration, but doesn’t tell us whether that interest is positive or negative. Additionally, the data captures search behavior, but not direct public action such as voting, protesting, or advocating for immigration reform, which may provide more insight into the extent of public sentiment than the current data. The regional Google Trends data is based on relative scores (0–100), not absolute search volume, which makes it difficult to compare true magnitude across locations. The possibility of Time Lag of data input from the goverment's enforcement may cause the result to become different from our expectations. For example, time lag may have switched a positive relationship between public sentiment and apprehension encounters into a negative relationship.
+
+## 7.5 Future Work
+
+### 7.5.1 Research Question 1
+It may be helpful to establish a wider dataset incorporating search terms which reveal an individual's attitude towards immigrants. For example, search terms like, "illegal alien," "gang member," "MS-13," and others may provide helpful context. It may also be worth comparing search interest for immigration with other topics relevant to elections in the US (e.g., "deficit spending," "China," etc.). This expanded dataset could aid in establishing a direct causal link between search interest and electoral outcomes.
+
+### 7.5.2 Research Question 2
+In regards to election results and immigration enforcement, perhaps zoning in on more specific states and their voting patterns as well as comparing voting patterns between states and/or counties specifically bordering on Mexico, Canada, or not would be more insightful in observing potential trends/patterns regarding immigration there. Other, more focused datasets for deportation or policy could be used, and comparisons/analysis regarding the effects of specific immigration/border policies could be addressed. 
+
+### 7.5.3 Research Question 3
+Future research into the relation between public sentiment and apprehensions may incorporate analysis from social media or news articles to capture actual actions, not just attention. In addition, an expansion of the enforcement dataset to include more years would improve both the longitudinal analysis and utility of the research for the media, voters, and policy-makers. 
+
+# 8. Summary
+
+We establish a correlation between search interest for immigration and electoral swings in the US that has become stronger over time. Google Trends and Apprehensions highlighted a potential relationship between public sentiment and immigration enforcement in the US; a increase in public sentiment correlates with further government action to improve and enforce immigration policy that is more fair with those involved. While the relationship between public sentiment and government's enforcement may not be specific (given the negative relationship between both variables), we can still interpret that the public's interest still plays a huge role in government's policy change. Meanwhile, though electoral results offer a degree of political context, they are not good predictors of immigration enforcement trends; . States that lie on the borders of the United States also do not necessarily vote more Republican votes in favor of harsher immigration policies, and instead mirror the same general voting trends of non-border states and the nation-wide popular vote results as a whole. Ultimately, the relationship between public opinion and immigration enforcement in the US remains elusive and nuanced due to policy lag and numerous confounding outside variables and events, whose influences may be hard to discern. But while not all research questions met their initial assumption, correlations between public sentiment and both the electoral swings and immigration enforcement were found. Google Trends Search Interest for Immigration and Electoral Swing results indicate an increasingly strong correlation between search interest for immigration and the electoral swing in elections from 2004 - 2020 in the US, while Google Trends Search Interest for Immigration and Apprehensions indicate that increases in public interest and sentiment regarding immigration correspond with lower immigration enforcement activity. 
